@@ -5,11 +5,20 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { requireSeller } from "@/lib/auth/guards";
 import { parseBookDetails } from "@/lib/books/book-details-schema";
+import { decideDeleteProduct, deleteProductErrorMessage } from "@/lib/books/decide-delete-product";
 import { decidePublish, publishErrorMessage } from "@/lib/books/decide-publish";
 import { decideRetry, retryErrorMessage } from "@/lib/books/decide-retry";
 import { parsePriceCop } from "@/lib/books/price";
+import { parseProductName, productNameErrorMessage } from "@/lib/books/product-name";
+import { productSlugCandidates } from "@/lib/books/product-slug";
 import { requestUploadCore, type RequestUploadResult } from "@/lib/books/request-upload-core";
-import { checkUpload, holdsUploadSlot, UPLOAD_TOKEN_TTL_MS } from "@/lib/books/upload-limit";
+import {
+  batchLimitMessage,
+  checkUpload,
+  decideBatchUpload,
+  holdsUploadSlot,
+  UPLOAD_TOKEN_TTL_MS,
+} from "@/lib/books/upload-limit";
 import { runIngestionWorker } from "@/lib/ingestion/worker";
 import { createPdfUploadUrl, getPdfSize, removePdf } from "@/lib/ingestion/storage";
 import { getSellerAccess } from "@/lib/seller/access";
@@ -53,32 +62,60 @@ function kickWorker() {
 // Uploads
 // ---------------------------------------------------------------------------
 
+/**
+ * Uploads that hold one of the seller's 12 slots. Removed pending uploads keep their slot while
+ * their signed upload token can still be used.
+ */
+async function countHeldSlots(sellerId: string): Promise<number> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - UPLOAD_TOKEN_TTL_MS).toISOString();
+  const { data, error } = await createAdminClient()
+    .from("book_uploads")
+    .select("status,removed_at")
+    .eq("seller_id", sellerId)
+    .or(`removed_at.is.null,removed_at.gt.${cutoff}`);
+  if (error) throw new Error(`upload count failed: ${error.message}`);
+  return (data ?? []).filter((row) => holdsUploadSlot(row as { status: string; removed_at: string | null }, now)).length;
+}
+
+/**
+ * Pre-check for a multi-file upload: the whole batch is rejected before any file is uploaded when it
+ * does not fit in the remaining slots. The DB trigger stays the race-safe backstop per file.
+ */
+export async function checkBatchCapacity(count: number): Promise<SimpleResult> {
+  const { seller } = await requireSeller();
+  const requested = typeof count === "number" && Number.isInteger(count) ? count : 0;
+  const verdict = decideBatchUpload({ slotsHeld: await countHeldSlots(seller.id), requested });
+  if (verdict.ok) return { ok: true };
+  if (verdict.reason === "empty_batch") return { ok: false, message: "Elige al menos un PDF." };
+  return { ok: false, message: batchLimitMessage(verdict.remaining) };
+}
+
 /** Step 1: validate + record the upload and hand back a signed URL; the browser uploads straight to storage. */
-export async function requestUpload(input: { name: string; size: number; mime: string }): Promise<RequestUploadResult> {
+export async function requestUpload(input: {
+  name: string;
+  size: number;
+  mime: string;
+  bookId?: string;
+}): Promise<RequestUploadResult> {
   const { seller } = await requireSeller();
   const name = typeof input?.name === "string" ? input.name : "";
   const size = typeof input?.size === "number" ? input.size : 0;
   const mime = typeof input?.mime === "string" ? input.mime : "";
+  const bookId = typeof input?.bookId === "string" ? input.bookId : undefined;
   const admin = createAdminClient();
 
   return requestUploadCore(
-    { name, size, mime },
+    { name, size, mime, bookId },
     {
       sellerId: seller.id,
       newId: randomUUID,
       hasActiveSubscription: () => hasActivePlan(seller),
-      async countActive() {
-        // Removed pending uploads keep their slot while their signed upload token can still be used.
-        const now = new Date();
-        const cutoff = new Date(now.getTime() - UPLOAD_TOKEN_TTL_MS).toISOString();
-        const { data, error } = await admin
-          .from("book_uploads")
-          .select("status,removed_at")
-          .eq("seller_id", seller.id)
-          .or(`removed_at.is.null,removed_at.gt.${cutoff}`);
-        if (error) throw new Error(`upload count failed: ${error.message}`);
-        return (data ?? []).filter((row) => holdsUploadSlot(row as { status: string; removed_at: string | null }, now)).length;
+      async isBookUsable(id) {
+        const book = await getOwnedBook(seller.id, id);
+        return book !== null && book.status !== "archived";
       },
+      countActive: () => countHeldSlots(seller.id),
       async insertUpload(row) {
         const { error } = await admin.from("book_uploads").insert(row);
         if (!error) return { ok: true };
@@ -195,6 +232,67 @@ export async function removeUpload(uploadId: string): Promise<SimpleResult> {
 // ---------------------------------------------------------------------------
 // Books
 // ---------------------------------------------------------------------------
+
+const SLUG_ATTEMPTS = 10;
+const PG_UNIQUE_VIOLATION = "23505";
+
+export type CreateProductResult = { ok: true; bookId: string } | { ok: false; message: string; code?: "subscription_required" };
+
+/** Creates an empty draft product by name; PDFs are attached to it afterwards. */
+export async function createProduct(name: string): Promise<CreateProductResult> {
+  const { seller } = await requireSeller();
+  const parsed = parseProductName(name);
+  if (!parsed.ok) return { ok: false, message: productNameErrorMessage(parsed.reason) };
+  if (!(await hasActivePlan(seller))) {
+    return { ok: false, message: retryErrorMessage("subscription_required"), code: "subscription_required" };
+  }
+
+  const admin = createAdminClient();
+  for (const slug of productSlugCandidates(parsed.value, SLUG_ATTEMPTS)) {
+    const { data, error } = await admin
+      .from("books")
+      .insert({ seller_id: seller.id, slug, title: parsed.value, status: "draft", price_cents: 0 })
+      .select("id")
+      .single();
+    if (!error && data) {
+      revalidateProducts();
+      return { ok: true, bookId: data.id as string };
+    }
+    if (error?.code !== PG_UNIQUE_VIOLATION) return { ok: false, message: GENERIC };
+  }
+  return { ok: false, message: "Ya tienes productos con un nombre muy parecido. Prueba con otro nombre." };
+}
+
+/** Deletes an empty draft without purchases. `purchases.book_id` is `on delete restrict` as the backstop. */
+export async function deleteProduct(bookId: string): Promise<SimpleResult> {
+  const { seller } = await requireSeller();
+  const book = await getOwnedBook(seller.id, bookId);
+  if (!book || book.legacy_store_id !== null) return { ok: false, message: NOT_FOUND };
+
+  const admin = createAdminClient();
+  const [purchases, uploads] = await Promise.all([
+    admin.from("purchases").select("id", { count: "exact", head: true }).eq("book_id", book.id),
+    admin
+      .from("book_uploads")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", seller.id)
+      .eq("book_id", book.id)
+      .is("removed_at", null),
+  ]);
+  if (purchases.error || uploads.error) return { ok: false, message: GENERIC };
+
+  const decision = decideDeleteProduct({
+    status: book.status,
+    hasPurchases: (purchases.count ?? 0) > 0,
+    activeUploadCount: uploads.count ?? 0,
+  });
+  if (!decision.ok) return { ok: false, message: deleteProductErrorMessage(decision.reason) };
+
+  const { error } = await admin.from("books").delete().eq("id", book.id).eq("seller_id", seller.id);
+  if (error) return { ok: false, message: GENERIC };
+  revalidateProducts();
+  return { ok: true };
+}
 
 export async function updateBookDetails(_prev: BookActionState, formData: FormData): Promise<BookActionState> {
   const { seller } = await requireSeller();

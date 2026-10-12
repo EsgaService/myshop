@@ -14,11 +14,43 @@ function makeDeps(over: Partial<UploadDeps> = {}): UploadDeps & { inserted: unkn
       inserted.push(row);
       return { ok: true } as const;
     }),
+    isBookUsable: vi.fn().mockResolvedValue(true),
     createSignedUrl: vi.fn().mockResolvedValue({ signedUrl: "https://x/upload", token: "tok" }),
     inserted,
     ...over,
   };
 }
+
+describe("requestUploadCore with a target product (R1.2, R1.3)", () => {
+  const bookId = "22222222-2222-4222-8222-222222222222";
+
+  it("binds the upload to the product when bookId is provided", async () => {
+    const deps = makeDeps();
+    const r = await requestUploadCore({ ...input, bookId }, deps);
+    expect(r.ok).toBe(true);
+    expect(deps.isBookUsable).toHaveBeenCalledWith(bookId);
+    expect(deps.inserted[0]).toMatchObject({ seller_id: "seller-1", book_id: bookId });
+  });
+
+  it("leaves book_id null when no product is given (legacy flow)", async () => {
+    const deps = makeDeps();
+    await requestUploadCore(input, deps);
+    expect(deps.inserted[0]).toMatchObject({ book_id: null });
+    expect(deps.isBookUsable).not.toHaveBeenCalled();
+  });
+
+  it("denies a product the seller does not own and persists nothing", async () => {
+    const deps = makeDeps({ isBookUsable: vi.fn().mockResolvedValue(false) });
+    const r = await requestUploadCore({ ...input, bookId }, deps);
+    expect(r).toMatchObject({ ok: false, reason: "product_not_found" });
+    expect(deps.insertUpload).not.toHaveBeenCalled();
+    expect(deps.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("explains the missing product in Spanish", () => {
+    expect(uploadErrorMessage("product_not_found")).toMatch(/producto/i);
+  });
+});
 
 describe("requestUploadCore (R11)", () => {
   it("records the upload under the seller path and returns a signed URL", async () => {
