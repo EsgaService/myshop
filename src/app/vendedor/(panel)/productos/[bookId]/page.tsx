@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyLinkButton } from "@/components/seller/CopyLinkButton";
-import { PriceEditor } from "@/components/seller/PriceEditor";
-import { PublishControl } from "@/components/seller/PublishControl";
+import { PricePublishControl } from "@/components/seller/PricePublishControl";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { requireSeller } from "@/lib/auth/guards";
@@ -38,10 +37,7 @@ export default async function EditBookPage({ params }: { params: Promise<{ bookI
 
       <Card className="space-y-5 p-6">
         <h2 className="font-display text-xl font-semibold">Precio y publicación</h2>
-        <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-          <PriceEditor bookId={book.id} priceCents={book.price_cents} />
-          <PublishControl bookId={book.id} published={published} />
-        </div>
+        <PricePublishControl bookId={book.id} priceCents={book.price_cents} published={published} />
       </Card>
 
       <Card className="space-y-4 p-6">

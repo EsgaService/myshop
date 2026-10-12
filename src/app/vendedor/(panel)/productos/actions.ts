@@ -10,7 +10,7 @@ import { classifyMoveRpcError, decideMoveUpload, moveUploadErrorMessage } from "
 import { classifyRemoveRpcError, decideRemoveUpload, removeUploadErrorMessage } from "@/lib/books/decide-remove-upload";
 import { decidePublish, mustRevertPublish, publishErrorMessage } from "@/lib/books/decide-publish";
 import { decideRetry, retryErrorMessage } from "@/lib/books/decide-retry";
-import { parsePriceCop } from "@/lib/books/price";
+import { parsePriceCop, priceErrorMessage, resolveOptionalPrice, resolvePublishPrice } from "@/lib/books/price";
 import { parseProductName, productNameErrorMessage } from "@/lib/books/product-name";
 import { productSlugCandidates } from "@/lib/books/product-slug";
 import { requestUploadCore, type RequestUploadResult } from "@/lib/books/request-upload-core";
@@ -353,11 +353,16 @@ const PG_UNIQUE_VIOLATION = "23505";
 
 export type CreateProductResult = { ok: true; bookId: string } | { ok: false; message: string; code?: "subscription_required" };
 
-/** Creates an empty draft product by name; PDFs are attached to it afterwards. */
-export async function createProduct(name: string): Promise<CreateProductResult> {
+/**
+ * Creates an empty draft product by name and an optional price (blank = no price yet); PDFs are attached to
+ * it afterwards. A filled price is validated like any other price.
+ */
+export async function createProduct(name: string, price?: string | null): Promise<CreateProductResult> {
   const { seller } = await requireSeller();
   const parsed = parseProductName(name);
   if (!parsed.ok) return { ok: false, message: productNameErrorMessage(parsed.reason) };
+  const parsedPrice = resolveOptionalPrice(typeof price === "string" ? price : null);
+  if (!parsedPrice.ok) return { ok: false, message: priceErrorMessage(parsedPrice.reason) };
   if (!(await hasActivePlan(seller))) {
     return { ok: false, message: retryErrorMessage("subscription_required"), code: "subscription_required" };
   }
@@ -366,7 +371,7 @@ export async function createProduct(name: string): Promise<CreateProductResult> 
   for (const slug of productSlugCandidates(parsed.value, SLUG_ATTEMPTS)) {
     const { data, error } = await admin
       .from("books")
-      .insert({ seller_id: seller.id, slug, title: parsed.value, status: "draft", price_cents: 0 })
+      .insert({ seller_id: seller.id, slug, title: parsed.value, status: "draft", price_cents: parsedPrice.cents ?? 0 })
       .select("id")
       .single();
     if (!error && data) {
@@ -430,15 +435,7 @@ export async function setBookPrice(_prev: BookActionState, formData: FormData): 
   if (!book) return { status: "error", message: NOT_FOUND };
 
   const parsed = parsePriceCop(String(formData.get("price") ?? ""));
-  if (!parsed.ok) {
-    const message =
-      parsed.reason === "too_low"
-        ? "El precio mínimo es 5.000 COP."
-        : parsed.reason === "too_high"
-          ? "El precio máximo es 1.000.000 COP."
-          : "Escribe un precio en pesos, sin decimales. Ejemplo: 19.900";
-    return { status: "error", message };
-  }
+  if (!parsed.ok) return { status: "error", message: priceErrorMessage(parsed.reason) };
 
   const { error } = await createAdminClient().from("books").update({ price_cents: parsed.cents }).eq("id", book.id).eq("seller_id", seller.id);
   if (error) return { status: "error", message: GENERIC };
@@ -462,9 +459,17 @@ export async function publishBook(_prev: BookActionState, formData: FormData): P
     .is("removed_at", null);
   if (countError) return { status: "error", message: GENERIC };
 
+  // The price field on screen wins over the stored one: validate it here and save it with the publication.
+  const submittedPrice = formData.get("price");
+  const price = resolvePublishPrice({
+    storedCents: book.price_cents,
+    submitted: typeof submittedPrice === "string" ? submittedPrice : null,
+  });
+  if (!price.ok) return { status: "error", message: priceErrorMessage(price.reason) };
+
   const decision = decidePublish({
     status: book.status,
-    priceCents: book.price_cents,
+    priceCents: price.cents,
     canPublish: access.canPublish,
     readyPdfCount: readyPdfCount ?? 0,
     isLegacy: book.legacy_store_id !== null,
@@ -476,11 +481,18 @@ export async function publishBook(_prev: BookActionState, formData: FormData): P
       code: decision.reason === "subscription_required" ? "subscription_required" : undefined,
     };
   }
-  if (book.status === "published") return { status: "saved" };
+  if (book.status === "published") {
+    if (price.changed) {
+      const { error } = await admin.from("books").update({ price_cents: price.cents }).eq("id", book.id).eq("seller_id", seller.id);
+      if (error) return { status: "error", message: GENERIC };
+      revalidateProducts();
+    }
+    return { status: "saved" };
+  }
 
   const { error } = await admin
     .from("books")
-    .update({ status: "published", published_at: new Date().toISOString() })
+    .update({ status: "published", published_at: new Date().toISOString(), price_cents: price.cents })
     .eq("id", book.id)
     .eq("seller_id", seller.id);
   if (error) return { status: "error", message: GENERIC };

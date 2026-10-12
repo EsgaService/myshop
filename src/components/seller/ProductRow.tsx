@@ -6,9 +6,8 @@ import type { Book, SellerUpload } from "@/lib/data/types";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { DeleteProductButton } from "./DeleteProductButton";
 import type { MoveTarget } from "./MoveUploadForm";
-import { PriceEditor } from "./PriceEditor";
 import { ProductPdfList } from "./ProductPdfList";
-import { PublishControl } from "./PublishControl";
+import { PricePublishControl } from "./PricePublishControl";
 
 /** One product of the seller: its PDFs, status, price editor, publish toggle and share links (R5, R7, R9). */
 export function ProductRow({
@@ -51,10 +50,7 @@ export function ProductRow({
         )}
       </section>
 
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
-        <PriceEditor bookId={book.id} priceCents={book.price_cents} />
-        <PublishControl bookId={book.id} published={published} />
-      </div>
+      <PricePublishControl bookId={book.id} priceCents={book.price_cents} published={published} />
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4">
         <CopyLinkButton label="Copiar enlace de la tienda" path={storePath(sellerSlug)} siteUrl={siteUrl} />
