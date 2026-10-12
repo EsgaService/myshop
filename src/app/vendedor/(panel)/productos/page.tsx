@@ -7,6 +7,7 @@ import { requireSeller } from "@/lib/auth/guards";
 import { listMyBooks, listMyMoveTargets, listMyUploads } from "@/lib/data/queries";
 import { getSellerAccess } from "@/lib/seller/access";
 import { groupUploadsByProduct } from "@/lib/seller/group-uploads";
+import { listMovablePdfs } from "@/lib/seller/movable-pdfs";
 
 export const metadata = { title: "Productos" };
 // Server actions on this page enqueue and run the ingestion worker via after().
@@ -59,11 +60,11 @@ export default async function ProductsPage() {
         <h2 id="books" className="font-display text-xl font-semibold">Mis productos</h2>
         {books.length === 0 ? (
           <p className="rounded-card border border-dashed border-border-strong p-8 text-center text-fg-muted">
-            Aún no tienes productos. Sube tu primer PDF y ponle un nombre para crear uno.
+            Aún no tienes productos. Elige «Nuevo producto» arriba, ponle un nombre (y un precio si quieres) y sube tu primer PDF, o créalo vacío.
           </p>
         ) : (
           groups.map(({ book, uploads: productUploads }) => (
-            <ProductRow key={book.id} book={book} uploads={productUploads} sellerSlug={seller.slug} siteUrl={siteUrl} moveTargets={moveTargets} />
+            <ProductRow key={book.id} book={book} uploads={productUploads} sellerSlug={seller.slug} siteUrl={siteUrl} moveTargets={moveTargets} movablePdfs={listMovablePdfs({ targetBookId: book.id, products: moveTargets, uploads })} />
           ))
         )}
       </section>

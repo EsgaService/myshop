@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { bookPaths, storePath } from "@/lib/books/share-links";
 import type { Book, SellerUpload } from "@/lib/data/types";
+import type { MovablePdf } from "@/lib/seller/movable-pdfs";
+import { AddExistingPdfsControl } from "./AddExistingPdfsControl";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { DeleteProductButton } from "./DeleteProductButton";
 import type { MoveTarget } from "./MoveUploadForm";
@@ -16,6 +18,7 @@ export function ProductRow({
   sellerSlug,
   siteUrl,
   moveTargets = [],
+  movablePdfs = [],
 }: {
   book: Book;
   uploads: SellerUpload[];
@@ -23,6 +26,8 @@ export function ProductRow({
   siteUrl: string;
   /** Every product the seller can move PDFs into (this one is filtered out). */
   moveTargets?: MoveTarget[];
+  /** Ready PDFs of the seller's other products that can be added to this one. */
+  movablePdfs?: MovablePdf[];
 }) {
   const published = book.status === "published";
   const canDelete = book.status === "draft" && uploads.length === 0;
@@ -48,6 +53,7 @@ export function ProductRow({
             Este producto no tiene PDF. Puedes subir uno, moverle un PDF desde otro producto o eliminarlo si ya no lo necesitas.
           </p>
         )}
+        <AddExistingPdfsControl target={{ id: book.id, title: book.title }} pdfs={movablePdfs} />
       </section>
 
       <PricePublishControl bookId={book.id} priceCents={book.price_cents} published={published} />
