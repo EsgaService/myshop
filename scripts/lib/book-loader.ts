@@ -2,7 +2,7 @@
 // then renders that Book as idempotent SQL.
 import fs from "node:fs";
 import path from "node:path";
-import { parseIngredient, parseYield, slugify, type Ingredient } from "./normalize-book";
+import { parseIngredient, parseYield, slugify, type Ingredient } from "../../src/lib/recipes/normalize-book";
 
 export type Block = { tipo: string; [k: string]: unknown };
 export type Section = { title: string; position: number; blocks: Block[] };
