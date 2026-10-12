@@ -149,6 +149,19 @@ export const listMyBooks = cache(async (sellerId: string): Promise<Book[]> => {
   return (data ?? []) as unknown as Book[];
 });
 
+/** Products a PDF can be moved into: the seller's non-legacy, non-archived products. */
+export const listMyMoveTargets = cache(async (sellerId: string): Promise<{ id: string; title: string }[]> => {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("books")
+    .select("id,title")
+    .eq("seller_id", sellerId)
+    .is("legacy_store_id", null)
+    .neq("status", "archived")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as { id: string; title: string }[];
+});
+
 // ---------------------------------------------------------------------------
 // Seller uploads and ingestion (owner-only under RLS)
 // ---------------------------------------------------------------------------

@@ -9,13 +9,15 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { SellerUpload, UploadJob } from "@/lib/data/types";
 import { describeUpload } from "@/lib/ingestion/job-view";
+import { MoveUploadControl } from "./MoveUploadControl";
+import type { MoveTarget } from "./MoveUploadForm";
 
 const POLL_MS = 3000;
 
 type PolledJob = Pick<UploadJob, "status" | "attempts" | "max_attempts"> & { error: string | null };
 
 /** One PDF being turned into a book. Polls the owner-only status endpoint until the job settles (R12). */
-export function JobStatus({ upload }: { upload: SellerUpload }) {
+export function JobStatus({ upload, moveTargets = [] }: { upload: SellerUpload; moveTargets?: MoveTarget[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
@@ -116,6 +118,9 @@ export function JobStatus({ upload }: { upload: SellerUpload }) {
           </Button>
         )}
       </div>
+      {upload.status === "ready" && moveTargets.length > 0 && (
+        <MoveUploadControl uploadId={upload.id} targets={moveTargets} />
+      )}
     </Card>
   );
 }

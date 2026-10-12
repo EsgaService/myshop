@@ -5,6 +5,7 @@ import { bookPaths, storePath } from "@/lib/books/share-links";
 import type { Book, SellerUpload } from "@/lib/data/types";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { DeleteProductButton } from "./DeleteProductButton";
+import type { MoveTarget } from "./MoveUploadForm";
 import { PriceEditor } from "./PriceEditor";
 import { ProductPdfList } from "./ProductPdfList";
 import { PublishControl } from "./PublishControl";
@@ -15,11 +16,14 @@ export function ProductRow({
   uploads,
   sellerSlug,
   siteUrl,
+  moveTargets = [],
 }: {
   book: Book;
   uploads: SellerUpload[];
   sellerSlug: string;
   siteUrl: string;
+  /** Every product the seller can move PDFs into (this one is filtered out). */
+  moveTargets?: MoveTarget[];
 }) {
   const published = book.status === "published";
   const canDelete = book.status === "draft" && uploads.length === 0;
@@ -39,7 +43,12 @@ export function ProductRow({
         <h4 className="text-sm font-medium text-fg">
           PDF del producto <span className="font-mono text-fg-muted">({uploads.length})</span>
         </h4>
-        <ProductPdfList uploads={uploads} />
+        <ProductPdfList uploads={uploads} moveTargets={moveTargets.filter((t) => t.id !== book.id)} />
+        {canDelete && (
+          <p className="text-xs text-fg-muted">
+            Este producto no tiene PDF. Puedes subir uno, moverle un PDF desde otro producto o eliminarlo si ya no lo necesitas.
+          </p>
+        )}
       </section>
 
       <div className="flex flex-wrap items-start gap-x-8 gap-y-4">

@@ -4,7 +4,7 @@ import { ProductRow } from "@/components/seller/ProductRow";
 import { ProductUploader } from "@/components/seller/ProductUploader";
 import { Notice } from "@/components/ui/Notice";
 import { requireSeller } from "@/lib/auth/guards";
-import { listMyBooks, listMyUploads } from "@/lib/data/queries";
+import { listMyBooks, listMyMoveTargets, listMyUploads } from "@/lib/data/queries";
 import { getSellerAccess } from "@/lib/seller/access";
 import { groupUploadsByProduct } from "@/lib/seller/group-uploads";
 
@@ -14,10 +14,11 @@ export const maxDuration = 300;
 
 export default async function ProductsPage() {
   const { seller } = await requireSeller();
-  const [books, uploads, access] = await Promise.all([
+  const [books, uploads, access, moveTargets] = await Promise.all([
     listMyBooks(seller.id),
     listMyUploads(seller.id),
     getSellerAccess(seller.id, seller.is_platform),
+    listMyMoveTargets(seller.id),
   ]);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
   // Each PDF is shown under its product. Legacy uploads without a product still need a place.
@@ -62,7 +63,7 @@ export default async function ProductsPage() {
           </p>
         ) : (
           groups.map(({ book, uploads: productUploads }) => (
-            <ProductRow key={book.id} book={book} uploads={productUploads} sellerSlug={seller.slug} siteUrl={siteUrl} />
+            <ProductRow key={book.id} book={book} uploads={productUploads} sellerSlug={seller.slug} siteUrl={siteUrl} moveTargets={moveTargets} />
           ))
         )}
       </section>

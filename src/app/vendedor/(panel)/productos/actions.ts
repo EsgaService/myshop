@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { requireSeller } from "@/lib/auth/guards";
 import { parseBookDetails } from "@/lib/books/book-details-schema";
 import { decideDeleteProduct, deleteProductErrorMessage } from "@/lib/books/decide-delete-product";
+import { classifyMoveRpcError, decideMoveUpload, moveUploadErrorMessage } from "@/lib/books/decide-move-upload";
 import { classifyRemoveRpcError, decideRemoveUpload, removeUploadErrorMessage } from "@/lib/books/decide-remove-upload";
 import { decidePublish, mustRevertPublish, publishErrorMessage } from "@/lib/books/decide-publish";
 import { decideRetry, retryErrorMessage } from "@/lib/books/decide-retry";
@@ -277,6 +278,70 @@ export async function removeUpload(uploadId: string): Promise<SimpleResult> {
   await removePdf(upload.storage_path).catch((e) => console.error("could not remove PDF object", e));
   revalidateProducts();
   return { ok: true };
+}
+
+export type MoveUploadResult =
+  | { ok: true; sourceEmpty: boolean }
+  | { ok: false; message: string; code?: "subscription_required" };
+
+/**
+ * Moves a READY PDF (and only its recipes and sections) to another product of the same seller through
+ * `move_upload_to_book`, which re-checks every guard under the product locks. Purchases are never touched.
+ * `sourceEmpty` tells the UI the origin product has no PDF left (it can be deleted if it is a draft).
+ */
+export async function moveUpload(uploadId: string, targetBookId: string): Promise<MoveUploadResult> {
+  const { seller } = await requireSeller();
+  const upload = await getOwnedUpload(seller.id, uploadId);
+  if (!upload) return { ok: false, message: "No encontramos ese archivo." };
+  if (!(await hasActivePlan(seller))) {
+    return { ok: false, message: retryErrorMessage("subscription_required"), code: "subscription_required" };
+  }
+
+  const [source, target] = await Promise.all([
+    upload.book_id ? getOwnedBook(seller.id, upload.book_id) : Promise.resolve(null),
+    getOwnedBook(seller.id, targetBookId),
+  ]);
+  if (!source || !target) return { ok: false, message: NOT_FOUND };
+
+  const admin = createAdminClient();
+  const { count, error: countError } = await admin
+    .from("book_uploads")
+    .select("id", { count: "exact", head: true })
+    .eq("seller_id", seller.id)
+    .eq("book_id", source.id)
+    .eq("status", "ready")
+    .is("removed_at", null)
+    .neq("id", upload.id);
+  if (countError) return { ok: false, message: GENERIC };
+
+  const decision = decideMoveUpload({
+    uploadStatus: upload.status,
+    uploadRemoved: false, // getOwnedUpload only returns active uploads
+    sourceId: source.id,
+    sourceStatus: source.status,
+    sourceIsLegacy: source.legacy_store_id !== null,
+    targetId: target.id,
+    targetIsLegacy: target.legacy_store_id !== null,
+    targetIsArchived: target.status === "archived",
+    otherReadyCount: count ?? 0,
+  });
+  if (!decision.ok) return { ok: false, message: moveUploadErrorMessage(decision.reason) };
+
+  const { data, error } = await admin.rpc("move_upload_to_book", {
+    p_seller: seller.id,
+    p_upload: upload.id,
+    p_target: target.id,
+  });
+  if (error) {
+    const failure = classifyMoveRpcError(error);
+    if (failure === "unknown") console.error("move_upload_to_book failed", error);
+    if (failure === "not_found") return { ok: false, message: "No encontramos ese archivo." };
+    if (failure === "unknown") return { ok: false, message: GENERIC };
+    return { ok: false, message: moveUploadErrorMessage(failure) };
+  }
+
+  revalidateProducts();
+  return { ok: true, sourceEmpty: (data as { source_empty?: boolean } | null)?.source_empty === true };
 }
 
 // ---------------------------------------------------------------------------
