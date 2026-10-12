@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SELLER_PLAN } from "@/lib/seller/decide-subscription";
-import { buildPurchaseRow, buildSubscriptionRow } from "./fulfill-rows";
+import { buildPurchaseRow, subscriptionGrantArgs } from "./fulfill-rows";
 
 describe("buildPurchaseRow", () => {
   const base = { userId: "u1", bookId: "b1", provider: "mock", providerRef: "mock_1", amountCents: 1990000, currency: "COP" };
@@ -22,28 +22,19 @@ describe("buildPurchaseRow", () => {
   });
 });
 
-describe("buildSubscriptionRow", () => {
-  const now = new Date("2026-10-12T10:00:00Z");
-  const base = { sellerId: "sel1", provider: "mock", providerRef: "mock_2", now };
-
-  it("starts a first period now and charges the server constant", () => {
-    const row = buildSubscriptionRow({ ...base, periods: [] });
-    expect(row.seller_id).toBe("sel1");
-    expect(row.amount_cents).toBe(SELLER_PLAN.amountCents);
-    expect(row.currency).toBe(SELLER_PLAN.currency);
-    expect(row.period_start).toBe("2026-10-12T10:00:00.000Z");
-    expect(row.period_end).toBe("2026-11-12T10:00:00.000Z");
+describe("subscriptionGrantArgs", () => {
+  it("maps the grant to the RPC arguments and always charges the server constant", () => {
+    expect(subscriptionGrantArgs({ sellerId: "sel1", provider: "mock", providerRef: "mock_2" })).toEqual({
+      p_seller: "sel1",
+      p_provider: "mock",
+      p_provider_ref: "mock_2",
+      p_amount_cents: SELLER_PLAN.amountCents,
+      p_currency: SELLER_PLAN.currency,
+    });
   });
 
-  it("chains a renewal at the end of the active coverage (no overlap)", () => {
-    const periods = [{ periodStart: new Date("2026-10-01T00:00:00Z"), periodEnd: new Date("2026-11-01T00:00:00Z") }];
-    const row = buildSubscriptionRow({ ...base, periods });
-    expect(row.period_start).toBe("2026-11-01T00:00:00.000Z");
-    expect(row.period_end).toBe("2026-12-01T00:00:00.000Z");
-  });
-
-  it("restarts from now after a lapse", () => {
-    const periods = [{ periodStart: new Date("2026-08-01T00:00:00Z"), periodEnd: new Date("2026-09-01T00:00:00Z") }];
-    expect(buildSubscriptionRow({ ...base, periods }).period_start).toBe("2026-10-12T10:00:00.000Z");
+  it("ignores any amount smuggled into the input (R6)", () => {
+    const args = subscriptionGrantArgs({ sellerId: "s", provider: "p", providerRef: "r", amountCents: 1 } as never);
+    expect(args.p_amount_cents).toBe(SELLER_PLAN.amountCents);
   });
 });

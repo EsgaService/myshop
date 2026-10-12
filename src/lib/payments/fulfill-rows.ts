@@ -1,4 +1,4 @@
-import { decideSubscription, periodEndFor, SELLER_PLAN, type SubscriptionPeriod } from "@/lib/seller/decide-subscription";
+import { SELLER_PLAN } from "@/lib/seller/decide-subscription";
 
 /** Pure row builders for fulfillment (no I/O, unit-testable). */
 
@@ -30,18 +30,16 @@ export type GrantSubscriptionInput = {
 };
 
 /**
- * Next paid period for a seller. The amount is always the server constant:
- * client or gateway supplied amounts are never used for the plan price (R6).
+ * Arguments of the `grant_subscription_period` RPC. The amount is always the server constant:
+ * client or gateway supplied amounts are never used for the plan price (R6). The period itself
+ * (contiguous start, anchored end) is computed in SQL under a per-seller lock.
  */
-export function buildSubscriptionRow(input: GrantSubscriptionInput & { periods: readonly SubscriptionPeriod[]; now: Date }) {
-  const { nextPeriodStart } = decideSubscription({ periods: input.periods, now: input.now });
+export function subscriptionGrantArgs(input: GrantSubscriptionInput) {
   return {
-    seller_id: input.sellerId,
-    provider: input.provider,
-    provider_ref: input.providerRef,
-    amount_cents: SELLER_PLAN.amountCents,
-    currency: SELLER_PLAN.currency,
-    period_start: nextPeriodStart.toISOString(),
-    period_end: periodEndFor(nextPeriodStart).toISOString(),
+    p_seller: input.sellerId,
+    p_provider: input.provider,
+    p_provider_ref: input.providerRef,
+    p_amount_cents: SELLER_PLAN.amountCents,
+    p_currency: SELLER_PLAN.currency,
   };
 }

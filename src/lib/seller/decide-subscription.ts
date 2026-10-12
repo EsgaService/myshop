@@ -13,15 +13,20 @@ export type SubscriptionState = {
 
 export type SellerAccess = { canPublish: boolean; isListed: boolean; canSell: boolean };
 
-/** Adds one calendar month in UTC, clamping to the last day of shorter months. */
-export function periodEndFor(start: Date, months: number = SELLER_PLAN.periodMonths): Date {
+/**
+ * Adds calendar months in UTC, landing on `anchorDay` (default: the start's own day) clamped to the
+ * length of the target month. Passing the ORIGINAL billing day avoids month-end drift:
+ * Jan 31 -> Feb 28 -> Mar 31 (not Mar 28). The SQL function `grant_subscription_period` applies
+ * the same rule; keep both in sync.
+ */
+export function periodEndFor(start: Date, months: number = SELLER_PLAN.periodMonths, anchorDay: number = start.getUTCDate()): Date {
   const y = start.getUTCFullYear();
   const m = start.getUTCMonth() + months;
   const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
   const end = new Date(start.getTime());
   end.setUTCDate(1);
   end.setUTCMonth(m);
-  end.setUTCDate(Math.min(start.getUTCDate(), lastDay));
+  end.setUTCDate(Math.min(anchorDay, lastDay));
   return end;
 }
 

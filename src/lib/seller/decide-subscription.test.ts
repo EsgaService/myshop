@@ -20,6 +20,33 @@ describe("periodEndFor", () => {
   it("rolls over the year", () => {
     expect(periodEndFor(d("2026-12-20T00:00:00Z")).toISOString()).toBe("2027-01-20T00:00:00.000Z");
   });
+
+  describe("month-end anchoring (no drift)", () => {
+    const iso = (start: string, anchor: number) => periodEndFor(d(start), 1, anchor).toISOString();
+
+    it("walks Jan 31 -> Feb 28 -> Mar 31 -> Apr 30 -> May 31 in a common year", () => {
+      expect(iso("2026-01-31T10:00:00Z", 31)).toBe("2026-02-28T10:00:00.000Z");
+      expect(iso("2026-02-28T10:00:00Z", 31)).toBe("2026-03-31T10:00:00.000Z");
+      expect(iso("2026-03-31T10:00:00Z", 31)).toBe("2026-04-30T10:00:00.000Z");
+      expect(iso("2026-04-30T10:00:00Z", 31)).toBe("2026-05-31T10:00:00.000Z");
+    });
+
+    it("uses Feb 29 in a leap year and recovers to Mar 31", () => {
+      expect(iso("2028-01-31T00:00:00Z", 31)).toBe("2028-02-29T00:00:00.000Z");
+      expect(iso("2028-02-29T00:00:00Z", 31)).toBe("2028-03-31T00:00:00.000Z");
+    });
+
+    it("anchors day 30 and day 29 as well", () => {
+      expect(iso("2026-01-30T00:00:00Z", 30)).toBe("2026-02-28T00:00:00.000Z");
+      expect(iso("2026-02-28T00:00:00Z", 30)).toBe("2026-03-30T00:00:00.000Z");
+      expect(iso("2027-01-29T00:00:00Z", 29)).toBe("2027-02-28T00:00:00.000Z");
+    });
+
+    it("defaults the anchor to the start day", () => {
+      expect(periodEndFor(d("2026-01-31T00:00:00Z")).toISOString()).toBe("2026-02-28T00:00:00.000Z");
+      expect(periodEndFor(d("2026-02-28T00:00:00Z")).toISOString()).toBe("2026-03-28T00:00:00.000Z");
+    });
+  });
 });
 
 describe("decideSubscription (R6-R8)", () => {

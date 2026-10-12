@@ -2,8 +2,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   buildPurchaseRow,
-  buildSubscriptionRow,
   type GrantPurchaseInput,
+  subscriptionGrantArgs,
   type GrantSubscriptionInput,
 } from "./fulfill-rows";
 
@@ -33,25 +33,11 @@ export async function grantPurchase(input: GrantPurchaseInput): Promise<void> {
 }
 
 /**
- * Appends the next paid period for a seller. Idempotent per (provider, provider_ref),
- * so a repeated webhook never extends the subscription twice.
+ * Appends the next paid period for a seller. The SQL function serializes grants per seller
+ * (row lock), computes the contiguous period and inserts idempotently per (provider, provider_ref),
+ * so concurrent or repeated webhooks never overlap or extend the subscription twice.
  */
 export async function grantSubscriptionPeriod(input: GrantSubscriptionInput): Promise<void> {
-  const admin = createAdminClient();
-  const { data, error: readError } = await admin
-    .from("subscriptions")
-    .select("period_start,period_end")
-    .eq("seller_id", input.sellerId);
-  if (readError) throw new Error(`Could not record subscription: ${readError.message}`);
-
-  const periods = (data ?? []).map((r) => ({
-    periodStart: new Date(r.period_start as string),
-    periodEnd: new Date(r.period_end as string),
-  }));
-  const row = buildSubscriptionRow({ ...input, periods, now: new Date() });
-
-  const { error } = await admin
-    .from("subscriptions")
-    .upsert(row, { onConflict: "provider,provider_ref", ignoreDuplicates: true });
+  const { error } = await createAdminClient().rpc("grant_subscription_period", subscriptionGrantArgs(input));
   if (error) throw new Error(`Could not record subscription: ${error.message}`);
 }
