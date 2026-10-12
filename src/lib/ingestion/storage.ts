@@ -33,3 +33,13 @@ export async function removePdf(path: string): Promise<void> {
   const { error } = await createAdminClient().storage.from(PDF_BUCKET).remove([path]);
   if (error) throw new Error(`Could not remove PDF: ${error.message}`);
 }
+
+/** Short-lived signed download URL for an original PDF. Callers must have authorized the download first. */
+export async function createPdfDownloadUrl(path: string, ttlSeconds: number, downloadName: string): Promise<string | null> {
+  const { data, error } = await createAdminClient().storage.from(PDF_BUCKET).createSignedUrl(path, ttlSeconds, { download: downloadName });
+  if (error || !data) {
+    console.error("could not sign PDF download", error?.message);
+    return null;
+  }
+  return data.signedUrl;
+}
