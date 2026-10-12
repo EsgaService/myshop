@@ -114,15 +114,24 @@ export const listListedBooks = cache(async (): Promise<BookWithSeller[]> => {
   return (data ?? []) as unknown as BookWithSeller[];
 });
 
+/**
+ * A book addressed by /<seller>/<book>. Resolved in two steps (seller, then book by
+ * seller_id) instead of filtering on an embedded resource, which is easy to get wrong.
+ * RLS decides visibility: published + live seller, own book, or purchased.
+ */
 export const getBookBySlugs = cache(async (sellerSlug: string, bookSlug: string): Promise<BookWithSeller | null> => {
+  const seller = await getSellerBySlug(sellerSlug);
+  if (!seller) return null;
   const supabase = await createClient();
   const { data } = await supabase
     .from("books")
-    .select(BOOK_WITH_SELLER)
+    .select(BOOK_COLUMNS)
+    .eq("seller_id", seller.id)
     .eq("slug", bookSlug)
-    .eq("seller.slug", sellerSlug)
     .maybeSingle();
-  return (data as unknown as BookWithSeller | null) ?? null;
+  if (!data) return null;
+  const { id, slug, store_name, is_platform } = seller;
+  return { ...(data as unknown as Book), seller: { id, slug, store_name, is_platform } };
 });
 
 /** Book ids the current user purchased. RLS limits rows to the caller. */
