@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideRemoveUpload, removeUploadErrorMessage } from "./decide-remove-upload";
+import { classifyRemoveRpcError, decideRemoveUpload, removeUploadErrorMessage } from "./decide-remove-upload";
 
 const base = {
   bookStatus: "draft" as const,
@@ -61,5 +61,26 @@ describe("removeUploadErrorMessage", () => {
   it("returns distinct Spanish copy per reason", () => {
     expect(removeUploadErrorMessage("processing")).toMatch(/procesando/i);
     expect(removeUploadErrorMessage("last_ready_pdf")).toMatch(/único PDF/);
+  });
+});
+
+describe("classifyRemoveRpcError", () => {
+  it("maps the last-PDF guard raised by the RPC", () => {
+    expect(classifyRemoveRpcError({ code: "P0001", message: "last_ready_pdf" })).toBe("last_ready_pdf");
+  });
+
+  it("maps a missing RPC (PostgREST PGRST202 or Postgres 42883) so the UI can explain it", () => {
+    expect(classifyRemoveRpcError({ code: "PGRST202", message: "Could not find the function" })).toBe("rpc_missing");
+    expect(classifyRemoveRpcError({ code: "42883", message: "function does not exist" })).toBe("rpc_missing");
+  });
+
+  it("maps ownership failures to not_found and everything else to unknown", () => {
+    expect(classifyRemoveRpcError({ code: "P0001", message: "upload_not_owned" })).toBe("not_found");
+    expect(classifyRemoveRpcError({ code: "XX000", message: "boom" })).toBe("unknown");
+    expect(classifyRemoveRpcError({})).toBe("unknown");
+  });
+
+  it("has Spanish copy for the missing RPC", () => {
+    expect(removeUploadErrorMessage("rpc_missing")).toMatch(/todavía no está disponible/);
   });
 });

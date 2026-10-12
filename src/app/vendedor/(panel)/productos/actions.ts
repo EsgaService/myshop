@@ -6,6 +6,7 @@ import { after } from "next/server";
 import { requireSeller } from "@/lib/auth/guards";
 import { parseBookDetails } from "@/lib/books/book-details-schema";
 import { decideDeleteProduct, deleteProductErrorMessage } from "@/lib/books/decide-delete-product";
+import { classifyRemoveRpcError, decideRemoveUpload, removeUploadErrorMessage } from "@/lib/books/decide-remove-upload";
 import { decidePublish, publishErrorMessage } from "@/lib/books/decide-publish";
 import { decideRetry, retryErrorMessage } from "@/lib/books/decide-retry";
 import { parsePriceCop } from "@/lib/books/price";
@@ -209,24 +210,61 @@ export async function retryIngestion(uploadId: string): Promise<SimpleResult> {
 }
 
 /**
- * Removes an unfinished or failed upload and frees its slot. Removing a ready PDF (which also removes
- * its recipes) is a separate, RPC-backed operation.
+ * Removes a PDF from its product and frees its slot. Unfinished or failed PDFs have no content, so they are
+ * soft-removed directly. A ready PDF goes through `remove_upload_from_book`, which deletes only its recipes
+ * and sections atomically under the product lock; purchases are never touched. PDFs still being processed
+ * cannot be removed, and the last ready PDF of a published product is protected.
  */
 export async function removeUpload(uploadId: string): Promise<SimpleResult> {
   const { seller } = await requireSeller();
   const upload = await getOwnedUpload(seller.id, uploadId);
   if (!upload) return { ok: false, message: "No encontramos ese archivo." };
-  if (upload.status !== "pending" && upload.status !== "failed") {
-    return { ok: false, message: "Este archivo no se puede eliminar." };
+
+  const admin = createAdminClient();
+  const book = upload.book_id ? await getOwnedBook(seller.id, upload.book_id) : null;
+  const [job, others] = await Promise.all([
+    admin.from("ingestion_jobs").select("status").eq("upload_id", upload.id).maybeSingle(),
+    upload.book_id
+      ? admin
+          .from("book_uploads")
+          .select("id", { count: "exact", head: true })
+          .eq("seller_id", seller.id)
+          .eq("book_id", upload.book_id)
+          .eq("status", "ready")
+          .is("removed_at", null)
+          .neq("id", upload.id)
+      : Promise.resolve({ count: 0, error: null }),
+  ]);
+  if (job.error || others.error) return { ok: false, message: GENERIC };
+
+  const decision = decideRemoveUpload({
+    bookStatus: book?.status ?? "draft",
+    uploadStatus: upload.status,
+    jobStatus: (job.data?.status as "queued" | "processing" | "succeeded" | "failed" | undefined) ?? null,
+    otherReadyCount: others.count ?? 0,
+  });
+  if (!decision.ok) return { ok: false, message: removeUploadErrorMessage(decision.reason) };
+
+  if (upload.status === "ready") {
+    const { error } = await admin.rpc("remove_upload_from_book", { p_seller: seller.id, p_upload: upload.id });
+    if (error) {
+      const failure = classifyRemoveRpcError(error);
+      if (failure === "unknown") console.error("remove_upload_from_book failed", error);
+      if (failure === "rpc_missing" || failure === "last_ready_pdf") {
+        return { ok: false, message: removeUploadErrorMessage(failure) };
+      }
+      return { ok: false, message: failure === "not_found" ? "No encontramos ese archivo." : GENERIC };
+    }
+  } else {
+    const { error } = await admin
+      .from("book_uploads")
+      .update({ removed_at: new Date().toISOString() })
+      .eq("id", upload.id)
+      .eq("seller_id", seller.id);
+    if (error) return { ok: false, message: GENERIC };
   }
 
-  const { error } = await createAdminClient()
-    .from("book_uploads")
-    .update({ removed_at: new Date().toISOString() })
-    .eq("id", upload.id)
-    .eq("seller_id", seller.id);
-  if (error) return { ok: false, message: GENERIC };
-
+  // After the commit: a leftover object is only a leak, never a broken product.
   await removePdf(upload.storage_path).catch((e) => console.error("could not remove PDF object", e));
   revalidateProducts();
   return { ok: true };

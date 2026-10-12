@@ -1,4 +1,4 @@
-export type RemoveUploadReason = "processing" | "last_ready_pdf";
+export type RemoveUploadReason = "processing" | "last_ready_pdf" | "rpc_missing";
 export type RemoveUploadDecision = { ok: true } | { ok: false; reason: RemoveUploadReason };
 
 /**
@@ -26,11 +26,28 @@ export function decideRemoveUpload(input: {
   return { ok: true };
 }
 
+export type RemoveRpcFailure = "last_ready_pdf" | "rpc_missing" | "not_found" | "unknown";
+
+/**
+ * Classifies a PostgREST error from `remove_upload_from_book`. The RPC ships in a migration the owner
+ * applies by hand, so "function not found" (PGRST202 / 42883) is an expected state, not a crash.
+ */
+export function classifyRemoveRpcError(error: { code?: string | null; message?: string | null }): RemoveRpcFailure {
+  const code = error.code ?? "";
+  const message = error.message ?? "";
+  if (code === "PGRST202" || code === "42883") return "rpc_missing";
+  if (message.includes("last_ready_pdf")) return "last_ready_pdf";
+  if (message.includes("upload_not_owned")) return "not_found";
+  return "unknown";
+}
+
 export function removeUploadErrorMessage(reason: RemoveUploadReason): string {
   switch (reason) {
     case "processing":
       return "Este PDF se está procesando. Espera a que termine para eliminarlo.";
     case "last_ready_pdf":
       return "Este es el único PDF listo del producto publicado. Despublica el producto o sube otro PDF antes de eliminarlo.";
+    case "rpc_missing":
+      return "Eliminar PDFs listos todavía no está disponible. Inténtalo más tarde.";
   }
 }
