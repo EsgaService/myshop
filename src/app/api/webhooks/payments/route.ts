@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPaymentProvider, PaymentsDisabledError } from "@/lib/payments";
-import { grantPurchase } from "@/lib/payments/fulfill";
+import { grantPurchase, grantSubscriptionPeriod } from "@/lib/payments/fulfill";
 
 /**
  * Webhook entry point for asynchronous gateways (dLocal Go, Mercado Pago, Stripe...).
@@ -22,14 +22,18 @@ export async function POST(request: Request) {
   if (!event) return NextResponse.json({ error: "invalid signature" }, { status: 400 });
 
   if (event.type === "payment.succeeded") {
-    await grantPurchase({
-      userId: event.userId,
-      storeId: event.storeId,
-      provider: provider.id,
-      providerRef: event.providerRef,
-      amountCents: event.amountCents,
-      currency: event.currency,
-    });
+    if (event.kind === "subscription") {
+      await grantSubscriptionPeriod({ sellerId: event.subjectId, provider: provider.id, providerRef: event.providerRef });
+    } else {
+      await grantPurchase({
+        userId: event.userId,
+        bookId: event.subjectId,
+        provider: provider.id,
+        providerRef: event.providerRef,
+        amountCents: event.amountCents,
+        currency: event.currency,
+      });
+    }
   }
   return NextResponse.json({ ok: true });
 }

@@ -4,10 +4,13 @@
  * adapter: it is done by server code that trusts either a synchronous `paid`
  * result from a trusted adapter or a verified webhook event.
  */
+export type PaymentKind = "purchase" | "subscription";
+
 export type CheckoutInput = {
+  kind: PaymentKind;
   userId: string;
-  storeId: string;
-  storeSlug: string;
+  /** bookId for purchases, sellerId for subscriptions. */
+  subjectId: string;
   amountCents: number;
   currency: string;
   payer: { name?: string; email?: string };
@@ -25,9 +28,11 @@ export type CheckoutResult =
 
 export type PaymentEvent = {
   type: "payment.succeeded" | "payment.failed" | "payment.refunded";
+  kind: PaymentKind;
+  /** bookId for purchases, sellerId for subscriptions. */
+  subjectId: string;
   providerRef: string;
   userId: string;
-  storeId: string;
   amountCents: number;
   currency: string;
 };

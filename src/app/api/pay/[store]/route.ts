@@ -27,9 +27,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ sto
     const provider = getPaymentProvider();
     // Price and currency always come from the database, never from the client.
     const result = await provider.createCheckout({
+      kind: "purchase",
       userId: user.id,
-      storeId: store.id,
-      storeSlug: store.slug,
+      subjectId: store.id,
       amountCents: store.price_cents,
       currency: store.currency,
       payer: { name: typeof payload.name === "string" ? payload.name : undefined, email: user.email },
@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ sto
 
     await grantPurchase({
       userId: user.id,
-      storeId: store.id,
+      bookId: store.id, // legacy books reuse stores.id (batch 6.5 moves this route to /api/pay/book/[bookId])
       provider: provider.id,
       providerRef: result.providerRef,
       amountCents: store.price_cents,
