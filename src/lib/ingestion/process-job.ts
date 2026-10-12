@@ -11,10 +11,10 @@ export type IngestionRepo = {
   getUpload(uploadId: string): Promise<UploadRef | null>;
   /** Atomic + idempotent (RPC create_book_from_ingestion). Also marks upload ready and job succeeded. */
   createBook(sellerId: string, uploadId: string, payload: BookPayload): Promise<string>;
-  /** Puts the job back in the queue to run at `runAfter`. */
-  markRetry(jobId: string, runAfter: Date, error: string): Promise<void>;
-  /** Marks job and upload as failed. */
-  markFailed(jobId: string, uploadId: string, error: string): Promise<void>;
+  /** Puts the job back in the queue to run at `runAfter`. No-op when the job was reclaimed meanwhile. */
+  markRetry(job: IngestionJob, runAfter: Date, error: string): Promise<void>;
+  /** Marks job and upload as failed. No-op when the job was reclaimed meanwhile. */
+  markFailed(job: IngestionJob, error: string): Promise<void>;
 };
 
 export type ProcessJobDeps = {
@@ -68,10 +68,10 @@ export async function processJob(job: IngestionJob, deps: ProcessJobDeps): Promi
 
     if (!permanent && job.attempts < job.max_attempts) {
       const runAfter = new Date(deps.now().getTime() + retryDelayMs(job.attempts));
-      await deps.repo.markRetry(job.id, runAfter, message);
+      await deps.repo.markRetry(job, runAfter, message);
       return { outcome: "retry", runAfter };
     }
-    await deps.repo.markFailed(job.id, job.upload_id, message);
+    await deps.repo.markFailed(job, message);
     return { outcome: "failed", error: message };
   }
 }

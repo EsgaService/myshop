@@ -3,10 +3,14 @@ import { after } from "next/server";
 import { getCurrentUser, getMySeller, getProfile } from "@/lib/data/queries";
 import { isUuid } from "@/lib/ids";
 import { shouldKickWorker } from "@/lib/ingestion/job-view";
+import { createKickGate } from "@/lib/ingestion/kick-gate";
 import { runIngestionWorker } from "@/lib/ingestion/worker";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 300;
+
+/** At most one poll-driven worker kick per 30s per process. */
+const pollKickGate = createKickGate(30_000);
 
 const NOT_FOUND = () => NextResponse.json({ error: "Not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
 
@@ -46,7 +50,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       runAfter: job.run_after as string,
       lockedAt: (job.locked_at as string | null) ?? null,
       now: new Date(),
-    })
+    }) &&
+    pollKickGate.tryAcquire()
   ) {
     after(async () => {
       try {

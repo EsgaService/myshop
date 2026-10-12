@@ -15,8 +15,8 @@ function makeDeps(overrides: Partial<{ [K in keyof ProcessJobDeps]: Partial<Proc
     repo: {
       getUpload: vi.fn(async () => upload as typeof upload | null),
       createBook: vi.fn(async (_s: string, _u: string, _p: unknown) => "book1"),
-      markRetry: vi.fn(async (_id: string, _runAfter: Date, _error: string) => {}),
-      markFailed: vi.fn(async (_id: string, _uploadId: string, _error: string) => {}),
+      markRetry: vi.fn(async (_job: unknown, _runAfter: Date, _error: string) => {}),
+      markFailed: vi.fn(async (_job: unknown, _error: string) => {}),
       ...overrides.repo,
     },
     storage: { downloadBase64: vi.fn(async (_path: string) => "QUJD"), ...overrides.storage },
@@ -51,7 +51,7 @@ describe("processJob", () => {
     expect(result.outcome).toBe("retry");
     const runAfter = new Date(now.getTime() + retryDelayMs(2));
     expect(result).toEqual({ outcome: "retry", runAfter });
-    expect(deps.repo.markRetry).toHaveBeenCalledWith("job1", runAfter, "timeout");
+    expect(deps.repo.markRetry).toHaveBeenCalledWith(job(2), runAfter, "timeout");
     expect(deps.repo.createBook).not.toHaveBeenCalled();
   });
 
@@ -60,7 +60,7 @@ describe("processJob", () => {
     const result = await processJob(job(3, 3), deps);
 
     expect(result).toEqual({ outcome: "failed", error: "timeout" });
-    expect(deps.repo.markFailed).toHaveBeenCalledWith("job1", "up1", "timeout");
+    expect(deps.repo.markFailed).toHaveBeenCalledWith(job(3, 3), "timeout");
     expect(deps.repo.markRetry).not.toHaveBeenCalled();
   });
 
@@ -71,7 +71,7 @@ describe("processJob", () => {
     const result = await processJob(job(1, 3), deps);
 
     expect(result).toEqual({ outcome: "failed", error: "truncated" });
-    expect(deps.repo.markFailed).toHaveBeenCalledWith("job1", "up1", "truncated");
+    expect(deps.repo.markFailed).toHaveBeenCalledWith(job(1, 3), "truncated");
     expect(deps.repo.markRetry).not.toHaveBeenCalled();
   });
 
