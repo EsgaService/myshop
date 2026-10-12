@@ -10,10 +10,12 @@ export default async function BookPage({ params }: { params: Promise<{ store: st
 
   const user = await getCurrentUser();
   const decision = decideAccess({
-    slug,
+    paths: { landing: `/${slug}`, checkout: `/${slug}/pagar`, book: `/${slug}/recetario` },
     route: "book",
-    isAuthenticated: !!user,
+    viewer: user ? "buyer" : "anon",
     hasPurchase: user ? await hasPurchased(store.id) : false,
+    isOwner: false,
+    sellable: true,
   });
   if (decision.kind === "redirect") redirect(decision.to);
 
