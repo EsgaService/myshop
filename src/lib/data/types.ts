@@ -1,6 +1,6 @@
 export type BookTeaser = {
   intro?: string[];
-  sample?: { title: string; ingredients: string[]; steps: string[] } | null;
+  sample?: { title: string; ingredients: string[] } | null;
 };
 
 export type Category = { id: string; slug: string; name: string; description: string | null; position: number };

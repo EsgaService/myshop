@@ -95,14 +95,19 @@ describe("toBookPayload (R13)", () => {
     expect(p.recipes[0].category_slug).toBe("postres");
   });
 
-  it("builds the teaser from the first paragraphs and the first recipe", () => {
+  it("builds the teaser from the first paragraphs and the first recipe (title and ingredients only)", () => {
     const { teaser } = toBookPayload(book());
     expect(teaser.intro).toEqual(["Primero.", "Segundo."]);
     expect(teaser.sample).toEqual({
       title: "Margarita",
       ingredients: ["60 ml de tequila", "1/2 limón", "Sal al gusto"],
-      steps: ["Agita.", "Sirve."],
     });
+  });
+
+  it("never stores recipe steps in the public teaser", () => {
+    const { teaser } = toBookPayload(book());
+    expect(JSON.stringify(teaser)).not.toContain("Agita.");
+    expect(teaser.sample).not.toHaveProperty("steps");
   });
 
   it("falls back to a default slug when the title has no usable characters", () => {

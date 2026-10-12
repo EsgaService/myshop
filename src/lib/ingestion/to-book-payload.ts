@@ -10,7 +10,7 @@ export type BookPayload = {
   title: string;
   tagline: string | null;
   description: string | null;
-  teaser: { intro: string[]; sample: { title: string; ingredients: string[]; steps: string[] } | null };
+  teaser: { intro: string[]; sample: { title: string; ingredients: string[] } | null };
   categories: { slug: string; name: string; description: string | null; position: number }[];
   sections: { position: number; title: string; blocks: unknown[] }[];
   recipes: {
@@ -90,7 +90,8 @@ export function toBookPayload(book: AiBook): BookPayload {
     description: book.description ?? null,
     teaser: {
       intro,
-      sample: first ? { title: first.title, ingredients: first.ingredients, steps: first.steps } : null,
+      // Public marketing preview: no steps, those are what the buyer pays for.
+      sample: first ? { title: first.title, ingredients: first.ingredients } : null,
     },
     categories,
     sections,
