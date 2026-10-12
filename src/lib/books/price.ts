@@ -25,3 +25,63 @@ export function parsePriceCop(raw: string): PriceResult {
   if (!Number.isSafeInteger(pesos)) return { ok: false, reason: "invalid" };
   return validatePriceCents(pesos * 100);
 }
+
+const MAX_PRICE_DIGITS = 9;
+
+/**
+ * Live formatting for the price field: keeps only digits (no decimals ever), drops leading zeros and groups
+ * thousands with dots ("40000" -> "40.000"). `digits` is the plain value; the server parses again.
+ */
+export function formatPriceInput(raw: string): { display: string; digits: string } {
+  const digits = String(raw ?? "")
+    .replace(/\D/g, "")
+    .replace(/^0+/, "")
+    .slice(0, MAX_PRICE_DIGITS);
+  return { display: digits.replace(/\B(?=(\d{3})+(?!\d))/g, "."), digits };
+}
+
+/** Caret position in a formatted `display` that sits after the first `digitCount` digits. */
+export function caretAfterFormat(display: string, digitCount: number): number {
+  if (digitCount <= 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < display.length; i++) {
+    if (/\d/.test(display[i]!)) seen++;
+    if (seen === digitCount) return i + 1;
+  }
+  return display.length;
+}
+
+export function priceErrorMessage(reason: "invalid" | "too_low" | "too_high"): string {
+  switch (reason) {
+    case "too_low":
+      return "El precio mínimo es 5.000 COP.";
+    case "too_high":
+      return "El precio máximo es 1.000.000 COP.";
+    case "invalid":
+      return "Escribe un precio en pesos, sin decimales. Ejemplo: 19900";
+  }
+}
+
+/** An optional price field: blank means "no price yet" (`cents: null`); anything else must be valid. */
+export function resolveOptionalPrice(
+  raw: string | null,
+): { ok: true; cents: number | null } | { ok: false; reason: "invalid" | "too_low" | "too_high" } {
+  if (raw === null || raw.trim() === "") return { ok: true, cents: null };
+  const parsed = parsePriceCop(raw);
+  return parsed.ok ? { ok: true, cents: parsed.cents } : parsed;
+}
+
+/**
+ * The price a publish request should use: the value on screen when the seller filled it in (validated, and
+ * flagged when it differs from the stored one so it is saved together with the publication), otherwise the
+ * stored price. An invalid on-screen value is an error, never a silent fallback.
+ */
+export function resolvePublishPrice(input: {
+  storedCents: number;
+  submitted: string | null;
+}): { ok: true; cents: number; changed: boolean } | { ok: false; reason: "invalid" | "too_low" | "too_high" } {
+  const optional = resolveOptionalPrice(input.submitted);
+  if (!optional.ok) return optional;
+  if (optional.cents === null) return { ok: true, cents: input.storedCents, changed: false };
+  return { ok: true, cents: optional.cents, changed: optional.cents !== input.storedCents };
+}
