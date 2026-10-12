@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decidePublish, publishErrorMessage } from "./decide-publish";
+import { decidePublish, mustRevertPublish, publishErrorMessage } from "./decide-publish";
 
 const ok = { status: "draft" as const, priceCents: 1_990_000, canPublish: true, readyPdfCount: 1, isLegacy: false };
 
@@ -58,6 +58,20 @@ describe("decidePublish (R7, R9)", () => {
 
   it("is idempotent for already published books", () => {
     expect(decidePublish({ ...ok, status: "published" })).toEqual({ ok: true });
+  });
+});
+
+describe("mustRevertPublish (publish vs removal race)", () => {
+  it("reverts when no ready PDF is left after publishing", () => {
+    expect(mustRevertPublish({ readyPdfCountAfter: 0, isLegacy: false })).toBe(true);
+  });
+
+  it("keeps the publication when a ready PDF remains", () => {
+    expect(mustRevertPublish({ readyPdfCountAfter: 1, isLegacy: false })).toBe(false);
+  });
+
+  it("never reverts legacy books", () => {
+    expect(mustRevertPublish({ readyPdfCountAfter: 0, isLegacy: true })).toBe(false);
   });
 });
 

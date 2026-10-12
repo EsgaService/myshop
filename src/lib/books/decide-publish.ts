@@ -24,6 +24,14 @@ export function decidePublish(input: {
   return { ok: true };
 }
 
+/**
+ * Post-publish re-check: a concurrent removal of the last ready PDF can slip between the
+ * pre-check and the status update, so the publication must be reverted when none is left.
+ */
+export function mustRevertPublish(input: { readyPdfCountAfter: number; isLegacy: boolean }): boolean {
+  return !input.isLegacy && input.readyPdfCountAfter < 1;
+}
+
 export function publishErrorMessage(reason: PublishReason): string {
   switch (reason) {
     case "subscription_required":

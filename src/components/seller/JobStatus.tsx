@@ -108,7 +108,7 @@ export function JobStatus({ upload }: { upload: SellerUpload }) {
         )}
         {canRemove && (
           <Button variant="ghost" className="h-9 px-4" disabled={pending} onClick={() => {
-              if (upload.status === "ready" && !window.confirm("Se eliminarán las recetas de este PDF del producto. Esta acción no se puede deshacer. ¿Continuar?")) return;
+              if (upload.status === "ready" && !window.confirm("Las recetas de este PDF desaparecerán del producto, también para quienes ya lo compraron, y el archivo dejará de poder descargarse. Esta acción no se puede deshacer. ¿Continuar?")) return;
               run(removeUpload);
             }}
           >

@@ -7,7 +7,7 @@ import { requireSeller } from "@/lib/auth/guards";
 import { parseBookDetails } from "@/lib/books/book-details-schema";
 import { decideDeleteProduct, deleteProductErrorMessage } from "@/lib/books/decide-delete-product";
 import { classifyRemoveRpcError, decideRemoveUpload, removeUploadErrorMessage } from "@/lib/books/decide-remove-upload";
-import { decidePublish, publishErrorMessage } from "@/lib/books/decide-publish";
+import { decidePublish, mustRevertPublish, publishErrorMessage } from "@/lib/books/decide-publish";
 import { decideRetry, retryErrorMessage } from "@/lib/books/decide-retry";
 import { parsePriceCop } from "@/lib/books/price";
 import { parseProductName, productNameErrorMessage } from "@/lib/books/product-name";
@@ -256,12 +256,21 @@ export async function removeUpload(uploadId: string): Promise<SimpleResult> {
       return { ok: false, message: failure === "not_found" ? "No encontramos ese archivo." : GENERIC };
     }
   } else {
-    const { error } = await admin
+    const { data: removed, error } = await admin
       .from("book_uploads")
       .update({ removed_at: new Date().toISOString() })
       .eq("id", upload.id)
-      .eq("seller_id", seller.id);
+      .eq("seller_id", seller.id)
+      .neq("status", "ready")
+      .is("removed_at", null)
+      .select("id");
     if (error) return { ok: false, message: GENERIC };
+    if (!removed || removed.length === 0) {
+      return {
+        ok: false,
+        message: "Este PDF cambió de estado mientras lo eliminabas. Actualiza la página e inténtalo de nuevo.",
+      };
+    }
   }
 
   // After the commit: a leftover object is only a leak, never a broken product.
@@ -410,6 +419,30 @@ export async function publishBook(_prev: BookActionState, formData: FormData): P
     .eq("id", book.id)
     .eq("seller_id", seller.id);
   if (error) return { status: "error", message: GENERIC };
+
+  // A removal of the last ready PDF may have committed between the pre-check and the update.
+  const isLegacy = book.legacy_store_id !== null;
+  if (!isLegacy) {
+    const { count: readyAfter, error: recountError } = await admin
+      .from("book_uploads")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", seller.id)
+      .eq("book_id", book.id)
+      .eq("status", "ready")
+      .is("removed_at", null);
+    if (recountError) console.error("publish re-count failed", recountError);
+    else if (mustRevertPublish({ readyPdfCountAfter: readyAfter ?? 0, isLegacy })) {
+      const { error: revertError } = await admin
+        .from("books")
+        .update({ status: "draft", published_at: null })
+        .eq("id", book.id)
+        .eq("seller_id", seller.id)
+        .eq("status", "published");
+      if (revertError) console.error("publish revert failed", revertError);
+      revalidateProducts();
+      return { status: "error", message: publishErrorMessage("no_ready_pdf") };
+    }
+  }
   revalidateProducts();
   return { status: "saved", message: "Recetario publicado." };
 }
