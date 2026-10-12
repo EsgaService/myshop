@@ -71,9 +71,8 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Applied on 2026-10-11: migration `init_schema`, `seed.sql`, `seed-books/*.sql` (micheladas: 22 recipes; cocteles: 27 recipes).
 - Applied on 2026-10-12: migrations `marketplace_schema`, `marketplace_rls`, `marketplace_books_policy_fix` (the last one adds `private.has_purchased()` and the anon read policy for listed books). Checks in `supabase/tests/marketplace_rls_checks.sql` (ends with `ALL_CHECKS_PASSED`).
 - Applied on 2026-10-12 (MCP): Migration A `20261013090000_multi_pdf_products` (provenance columns, per-PDF teaser, merge RPC). Merge checks `supabase/tests/multi_pdf_checks.sql` passed remotely (the `claim_ingestion_job` block was skipped there because it would claim real jobs).
-- **PENDING, manual apply:** Migration B `20261013090100_remove_upload_rpc.sql` (`remove_upload_from_book`; it contains DELETE so the MCP rejects it). Run it in the Dashboard SQL editor, then `supabase/tests/multi_pdf_removal_checks.sql` (self-contained, begin/rollback). Until it is applied, removing a ready PDF shows a "todavía no está disponible" error; pending/failed PDFs are still removable.
-- **PENDING, manual apply (after B):** Migration C `20261013090200_move_upload_rpc.sql` (`move_upload_to_book`; contains DELETE, so Dashboard/CLI only). Then run `supabase/tests/multi_pdf_move_checks.sql` (self-contained, begin/rollback; validated locally on supabase/postgres 17). Until applied, the "Mover a…" control on a ready PDF answers "todavía no está disponible". The UI always asks for confirmation (buyers lose the recipes in the origin product) and an emptied draft shows the delete hint.
-- Migration `20261012130000_marketplace_review_fixes.sql` (claim bounds, `manual_retries`, upload slot rule, `grant_subscription_period`, `sellers` column grants, teaser scrub) is validated against a local Postgres 17 but must be applied with the Supabase MCP `apply_migration` (or Dashboard); record the date here once applied.
+- Applied on 2026-10-12 (Supabase CLI, `supabase db query --linked --project-ref ihbmaydqjsoynsiugzfv -f <file>`): Migration B `20261013090100_remove_upload_rpc` (`remove_upload_from_book`) and Migration C `20261013090200_move_upload_rpc` (`move_upload_to_book`). Both contain DELETE, so the MCP rejects them. `supabase/tests/multi_pdf_removal_checks.sql` and `multi_pdf_move_checks.sql` passed remotely. Both versions were inserted by hand into `supabase_migrations.schema_migrations`.
+- Applied on 2026-10-12: `20261012130000_marketplace_review_fixes` (claim bounds, `manual_retries`, upload slot rule, `grant_subscription_period`, `sellers` column grants, teaser scrub).
 - Bucket `seller-pdfs` is private, 20 MB, PDF only, no `storage.objects` client policies (uploads use signed upload URLs).
 - Not yet verified with real sessions: buyer reading purchased recipes, seller flows end to end.
 
@@ -88,7 +87,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 
 ## Gotchas
 
-- **The MCP `execute_sql` AND `apply_migration` reject `DELETE` and also `DROP POLICY`** with `Invalid or expired requestState` (destructive-statement confirmation fails in this client). Policy drops must be applied through the Dashboard SQL editor or the Supabase CLI. Re-running a seed-book through the MCP would duplicate `book_sections`; re-import via Dashboard, CLI, or `npm run import:book -- ... --apply`.
+- **The MCP `execute_sql` AND `apply_migration` reject `DELETE` and also `DROP POLICY`** with `Invalid or expired requestState` (destructive-statement confirmation fails in this client), even inside a function body. Apply those with the Supabase CLI (logged in via `npx supabase login`): `npx supabase db query --linked --project-ref ihbmaydqjsoynsiugzfv --yes -f <file>`. It goes through the Management API (no DB password) and surfaces SQL errors; NOTICEs are not printed. The account logged into the Chrome Supabase Dashboard does NOT own this project. Re-running a seed-book through the MCP would duplicate `book_sections`; re-import via Dashboard, CLI, or `npm run import:book -- ... --apply`.
 - Writing `.env*` with the Edit/Write tools may be blocked by local permissions; a shell append works. Never touch `.env.local`: the user creates it by hand from `.env.example`.
 - Google OAuth redirect URI in Google Cloud must be the Supabase one: `https://ihbmaydqjsoynsiugzfv.supabase.co/auth/v1/callback`. `http://localhost:4000/auth/callback` goes in Supabase > Auth > URL Configuration > Redirect URLs.
 - Book branding utilities are `book-*` (`bg-book-primary`, ...) to avoid clashing with the app tokens (`bg`, `surface`, `fg`, `primary`).
@@ -107,7 +106,6 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 
 ## Next steps
 
-0. Apply Migration B manually (see Supabase section) and run its checks.
 1. Manual E2E with real sessions: seller (sign in, profile, create a product, upload 2-3 PDFs into it, ingestion, remove one PDF, price, mock subscription, publish, share link) and buyer (sign in, `/explorar`, mock purchase, `/recetario`, download the original PDFs, `/mis-recetarios`), plus the exclusive-role redirects.
 2. Set `ANTHROPIC_API_KEY` (and optionally `ANTHROPIC_MODEL`) to switch from the mock AI to Claude.
 3. In production, schedule a cron that calls `POST /api/ingestion/run` with `Authorization: Bearer $INGESTION_WORKER_SECRET`.
