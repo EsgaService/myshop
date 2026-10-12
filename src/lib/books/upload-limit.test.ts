@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PDF_BYTES, MAX_UPLOADS_PER_SELLER, checkUpload } from "./upload-limit";
+import { MAX_PDF_BYTES, MAX_UPLOADS_PER_SELLER, UPLOAD_TOKEN_TTL_MS, checkUpload, holdsUploadSlot } from "./upload-limit";
 
 const ok = { activeCount: 0, size: 1024, mime: "application/pdf", name: "recetas.pdf" };
 
@@ -37,5 +37,33 @@ describe("checkUpload (R11)", () => {
 
   it("rejects non-finite sizes", () => {
     expect(checkUpload({ ...ok, size: Number.NaN })).toEqual({ ok: false, reason: "empty" });
+  });
+});
+
+describe("holdsUploadSlot (removal must not free a slot while the signed upload token is usable)", () => {
+  const now = new Date("2026-10-12T12:00:00Z");
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+
+  it("has a 2 hour token window", () => {
+    expect(UPLOAD_TOKEN_TTL_MS).toBe(2 * 60 * 60 * 1000);
+  });
+
+  it("holds a slot for every active upload", () => {
+    for (const status of ["pending", "uploaded", "processing", "ready", "failed"] as const) {
+      expect(holdsUploadSlot({ status, removed_at: null }, now)).toBe(true);
+    }
+  });
+
+  it("keeps the slot of a removed PENDING upload until its token expires", () => {
+    expect(holdsUploadSlot({ status: "pending", removed_at: ago(60_000) }, now)).toBe(true);
+    expect(holdsUploadSlot({ status: "pending", removed_at: ago(UPLOAD_TOKEN_TTL_MS - 1) }, now)).toBe(true);
+    expect(holdsUploadSlot({ status: "pending", removed_at: ago(UPLOAD_TOKEN_TTL_MS) }, now)).toBe(false);
+    expect(holdsUploadSlot({ status: "pending", removed_at: ago(UPLOAD_TOKEN_TTL_MS + 1) }, now)).toBe(false);
+  });
+
+  it("frees the slot at once for removed uploads whose token was already used", () => {
+    for (const status of ["uploaded", "processing", "ready", "failed"] as const) {
+      expect(holdsUploadSlot({ status, removed_at: ago(1_000) }, now)).toBe(false);
+    }
   });
 });

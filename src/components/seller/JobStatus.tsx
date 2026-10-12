@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { removeUpload, retryIngestion } from "@/app/vendedor/(panel)/productos/actions";
+import { removeUpload, retryIngestion, type SimpleResult } from "@/app/vendedor/(panel)/productos/actions";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -18,6 +19,7 @@ export function JobStatus({ upload }: { upload: SellerUpload }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [needsPlan, setNeedsPlan] = useState(false);
   const [polled, setPolled] = useState<PolledJob | null>(null);
 
   // Server data wins whenever the page re-renders with a fresh job.
@@ -60,11 +62,15 @@ export function JobStatus({ upload }: { upload: SellerUpload }) {
     };
   }, [view.polling, jobId, router, settled]);
 
-  function run(action: (id: string) => Promise<{ ok: true } | { ok: false; message: string }>) {
+  function run(action: (id: string) => Promise<SimpleResult>) {
     setActionError(null);
+    setNeedsPlan(false);
     startTransition(async () => {
       const result = await action(upload.id);
-      if (!result.ok) setActionError(result.message);
+      if (!result.ok) {
+        setActionError(result.message);
+        setNeedsPlan(result.code === "subscription_required");
+      }
       else router.refresh();
     });
   }
@@ -77,7 +83,20 @@ export function JobStatus({ upload }: { upload: SellerUpload }) {
           {view.polling ? "Esto puede tardar unos minutos. Puedes seguir usando el panel." : ""}
           {error && <span className="text-danger">{error}</span>}
         </p>
-        {actionError && <p role="alert" className="mt-1 text-xs text-danger">{actionError}</p>}
+        {actionError && (
+          <p role="alert" className="mt-1 text-xs text-danger">
+            {actionError}
+            {needsPlan && (
+              <>
+                {" "}
+                <Link href="/vendedor/suscripcion" className="font-medium underline">
+                  Activa tu suscripción
+                </Link>
+                .
+              </>
+            )}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <Badge tone={view.tone} aria-live="polite">{view.label}</Badge>

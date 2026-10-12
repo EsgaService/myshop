@@ -6,9 +6,10 @@ import { after } from "next/server";
 import { requireSeller } from "@/lib/auth/guards";
 import { parseBookDetails } from "@/lib/books/book-details-schema";
 import { decidePublish, publishErrorMessage } from "@/lib/books/decide-publish";
+import { decideRetry, retryErrorMessage } from "@/lib/books/decide-retry";
 import { parsePriceCop } from "@/lib/books/price";
 import { requestUploadCore, type RequestUploadResult } from "@/lib/books/request-upload-core";
-import { checkUpload } from "@/lib/books/upload-limit";
+import { checkUpload, holdsUploadSlot, UPLOAD_TOKEN_TTL_MS } from "@/lib/books/upload-limit";
 import { runIngestionWorker } from "@/lib/ingestion/worker";
 import { createPdfUploadUrl, getPdfSize, removePdf } from "@/lib/ingestion/storage";
 import { getSellerAccess } from "@/lib/seller/access";
@@ -23,10 +24,15 @@ export type BookActionState = {
   code?: "subscription_required";
 };
 
-export type SimpleResult = { ok: true } | { ok: false; message: string };
+export type SimpleResult = { ok: true } | { ok: false; message: string; code?: "subscription_required" };
 
 const NOT_FOUND = "No encontramos ese recetario en tu tienda.";
 const GENERIC = "No pudimos completar la acción. Inténtalo de nuevo.";
+
+/** Uploading and retrying run the paid AI pipeline: only sellers who can sell (active plan) may trigger it. */
+async function hasActivePlan(seller: { id: string; is_platform: boolean }): Promise<boolean> {
+  return (await getSellerAccess(seller.id, seller.is_platform)).canSell;
+}
 
 function revalidateProducts() {
   revalidatePath("/vendedor", "layout");
@@ -60,14 +66,18 @@ export async function requestUpload(input: { name: string; size: number; mime: s
     {
       sellerId: seller.id,
       newId: randomUUID,
+      hasActiveSubscription: () => hasActivePlan(seller),
       async countActive() {
-        const { count, error } = await admin
+        // Removed pending uploads keep their slot while their signed upload token can still be used.
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - UPLOAD_TOKEN_TTL_MS).toISOString();
+        const { data, error } = await admin
           .from("book_uploads")
-          .select("id", { count: "exact", head: true })
+          .select("status,removed_at")
           .eq("seller_id", seller.id)
-          .is("removed_at", null);
+          .or(`removed_at.is.null,removed_at.gt.${cutoff}`);
         if (error) throw new Error(`upload count failed: ${error.message}`);
-        return count ?? 0;
+        return (data ?? []).filter((row) => holdsUploadSlot(row as { status: string; removed_at: string | null }, now)).length;
       },
       async insertUpload(row) {
         const { error } = await admin.from("book_uploads").insert(row);
@@ -85,6 +95,9 @@ export async function confirmUpload(uploadId: string): Promise<SimpleResult> {
   const upload = await getOwnedUpload(seller.id, uploadId);
   if (!upload) return { ok: false, message: "No encontramos ese archivo." };
   if (upload.status !== "pending") return { ok: true }; // already confirmed: idempotent
+  if (!(await hasActivePlan(seller))) {
+    return { ok: false, message: retryErrorMessage("subscription_required"), code: "subscription_required" };
+  }
 
   const size = await getPdfSize(upload.storage_path);
   if (size === null) return { ok: false, message: "No encontramos el archivo subido. Inténtalo de nuevo." };
@@ -108,18 +121,46 @@ export async function confirmUpload(uploadId: string): Promise<SimpleResult> {
   return { ok: true };
 }
 
-/** Requeues a failed job from scratch. */
+/** Requeues a failed job from scratch. Needs an active plan and is capped per upload (each run re-bills the AI). */
 export async function retryIngestion(uploadId: string): Promise<SimpleResult> {
   const { seller } = await requireSeller();
   const upload = await getOwnedUpload(seller.id, uploadId);
   if (!upload) return { ok: false, message: "No encontramos ese archivo." };
 
   const admin = createAdminClient();
-  const { data, error } = await admin
+  const { data: job, error: jobError } = await admin
     .from("ingestion_jobs")
-    .update({ status: "queued", attempts: 0, run_after: new Date().toISOString(), locked_at: null, last_error: null })
+    .select("id,manual_retries")
     .eq("upload_id", upload.id)
     .eq("status", "failed")
+    .maybeSingle();
+  if (jobError) return { ok: false, message: GENERIC };
+  if (!job) return { ok: false, message: "Este archivo no se puede reintentar." };
+
+  const manualRetries = job.manual_retries as number;
+  const decision = decideRetry({ hasActiveSubscription: await hasActivePlan(seller), manualRetries });
+  if (!decision.ok) {
+    return {
+      ok: false,
+      message: retryErrorMessage(decision.reason),
+      code: decision.reason === "subscription_required" ? "subscription_required" : undefined,
+    };
+  }
+
+  // Compare-and-set on the counter so concurrent clicks cannot exceed the cap.
+  const { data, error } = await admin
+    .from("ingestion_jobs")
+    .update({
+      status: "queued",
+      attempts: 0,
+      run_after: new Date().toISOString(),
+      locked_at: null,
+      last_error: null,
+      manual_retries: manualRetries + 1,
+    })
+    .eq("id", job.id)
+    .eq("status", "failed")
+    .eq("manual_retries", manualRetries)
     .select("id");
   if (error) return { ok: false, message: GENERIC };
   if (!data || data.length === 0) return { ok: false, message: "Este archivo no se puede reintentar." };

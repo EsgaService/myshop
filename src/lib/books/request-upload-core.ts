@@ -1,11 +1,13 @@
 import { pdfPath } from "@/lib/ingestion/pdf-path";
 import { checkUpload } from "./upload-limit";
 
-export type UploadFailureReason = "limit_reached" | "not_pdf" | "empty" | "too_large" | "failed";
+export type UploadFailureReason = "subscription_required" | "limit_reached" | "not_pdf" | "empty" | "too_large" | "failed";
 
 export type UploadDeps = {
   sellerId: string;
   newId(): string;
+  /** Processing PDFs costs AI money: only sellers with an active subscription may upload. */
+  hasActiveSubscription(): Promise<boolean>;
   /** Active (not removed) uploads of the seller. */
   countActive(): Promise<number>;
   /** `limit: true` means the DB trigger rejected the row (race-safe 12 limit). */
@@ -33,6 +35,8 @@ function safeName(raw: string): string {
 
 export function uploadErrorMessage(reason: UploadFailureReason): string {
   switch (reason) {
+    case "subscription_required":
+      return "Necesitas una suscripción activa para subir PDF.";
     case "limit_reached":
       return "Llegaste al máximo de 12 PDF. Elimina uno que haya fallado para subir otro.";
     case "not_pdf":
@@ -57,6 +61,8 @@ export async function requestUploadCore(
   input: { name: string; size: number; mime: string },
   deps: UploadDeps,
 ): Promise<RequestUploadResult> {
+  if (!(await deps.hasActiveSubscription())) return fail("subscription_required");
+
   const activeCount = await deps.countActive();
   const check = checkUpload({ activeCount, size: input.size, mime: input.mime, name: input.name });
   if (!check.ok) return fail(check.reason);

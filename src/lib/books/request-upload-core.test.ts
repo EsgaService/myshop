@@ -8,6 +8,7 @@ function makeDeps(over: Partial<UploadDeps> = {}): UploadDeps & { inserted: unkn
   return {
     sellerId: "seller-1",
     newId: () => "11111111-1111-4111-8111-111111111111",
+    hasActiveSubscription: vi.fn().mockResolvedValue(true),
     countActive: vi.fn().mockResolvedValue(0),
     insertUpload: vi.fn(async (row) => {
       inserted.push(row);
@@ -38,6 +39,19 @@ describe("requestUploadCore (R11)", () => {
       original_name: "recetas.pdf",
       size_bytes: 1_000_000,
     });
+  });
+
+  it("requires an active subscription before counting, recording or signing anything (AI costs money)", async () => {
+    const deps = makeDeps({ hasActiveSubscription: vi.fn().mockResolvedValue(false) });
+    const r = await requestUploadCore(input, deps);
+    expect(r).toMatchObject({ ok: false, reason: "subscription_required" });
+    expect(deps.countActive).not.toHaveBeenCalled();
+    expect(deps.insertUpload).not.toHaveBeenCalled();
+    expect(deps.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("explains the subscription requirement in Spanish", () => {
+    expect(uploadErrorMessage("subscription_required")).toMatch(/suscripci/i);
   });
 
   it("rejects the 13th upload in the app without touching the database", async () => {

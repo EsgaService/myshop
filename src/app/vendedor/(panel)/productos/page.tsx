@@ -29,14 +29,15 @@ export default async function ProductsPage() {
         <p className="mt-2 text-fg-muted">Sube tus PDF, revisa el recetario que genera la IA, ponle precio y publícalo.</p>
       </header>
 
-      {!access.canPublish && (
+      {!access.canSell && (
         <Notice>
-          Puedes subir PDF y preparar tus recetarios, pero necesitas una{" "}
-          <Link href="/vendedor/suscripcion" className="font-medium underline">suscripción activa</Link> para publicarlos.
+          Necesitas una{" "}
+          <Link href="/vendedor/suscripcion" className="font-medium underline">suscripción activa</Link> para subir PDF y
+          publicar tus recetarios. Puedes completar tu perfil antes de pagar.
         </Notice>
       )}
 
-      <UploadDropzone activeCount={uploads.length} />
+      <UploadDropzone activeCount={uploads.length} canUpload={access.canSell} />
 
       {inProgress.length > 0 && (
         <section aria-labelledby="in-progress" className="space-y-3">
