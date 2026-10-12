@@ -1,22 +1,6 @@
-export type Store = {
-  id: string;
-  slug: string;
-  name: string;
-  tagline: string | null;
-  description: string | null;
-  logo_url: string | null;
-  cover_url: string | null;
-  primary_color: string;
-  secondary_color: string;
-  background_color: string;
-  text_color: string;
-  font: string;
-  price_cents: number;
-  currency: string;
-  teaser: {
-    intro?: string[];
-    sample?: { title: string; ingredients: string[]; steps: string[] } | null;
-  };
+export type BookTeaser = {
+  intro?: string[];
+  sample?: { title: string; ingredients: string[]; steps: string[] } | null;
 };
 
 export type Category = { id: string; slug: string; name: string; description: string | null; position: number };
@@ -88,7 +72,7 @@ export type Book = {
   font: string;
   price_cents: number;
   currency: string;
-  teaser: Store["teaser"];
+  teaser: BookTeaser;
   status: BookStatus;
   published_at: string | null;
 };

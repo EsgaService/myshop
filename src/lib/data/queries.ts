@@ -1,40 +1,12 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { Book, BookWithSeller, Category, Profile, Recipe, Section, Seller, SellerUpload, Store, UploadJob } from "./types";
-
-const STORE_COLUMNS =
-  "id,slug,name,tagline,description,logo_url,cover_url,primary_color,secondary_color,background_color,text_color,font,price_cents,currency,teaser";
+import type { Book, BookWithSeller, Category, Profile, Recipe, Section, Seller, SellerUpload, UploadJob } from "./types";
 
 export const getCurrentUser = cache(async () => {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   return data.user;
 });
-
-export const listStores = cache(async (): Promise<Store[]> => {
-  const supabase = await createClient();
-  const { data } = await supabase.from("stores").select(STORE_COLUMNS).order("name");
-  return (data ?? []) as Store[];
-});
-
-export const getStore = cache(async (slug: string): Promise<Store | null> => {
-  const supabase = await createClient();
-  const { data } = await supabase.from("stores").select(STORE_COLUMNS).eq("slug", slug).maybeSingle();
-  return (data as Store | null) ?? null;
-});
-
-/** Store ids the current user purchased. RLS limits rows to the caller. */
-export const listPurchasedStoreIds = cache(async (): Promise<Set<string>> => {
-  const user = await getCurrentUser();
-  if (!user) return new Set();
-  const supabase = await createClient();
-  const { data } = await supabase.from("purchases").select("store_id");
-  return new Set((data ?? []).map((r) => r.store_id as string));
-});
-
-export async function hasPurchased(storeId: string): Promise<boolean> {
-  return (await listPurchasedStoreIds()).has(storeId);
-}
 
 /** Recipes, sections and categories of a book (book id == legacy store id). RLS limits rows to buyers/owner. */
 export async function getBook(storeId: string) {
