@@ -1,5 +1,6 @@
 import "server-only";
 import { getAiBookProvider } from "@/lib/ai";
+import { jobTimeoutMs } from "./deadline";
 import { drainQueue, type DrainSummary } from "./drain";
 import { processJob } from "./process-job";
 import { claimNextJob, createIngestionRepo } from "./repo";
@@ -21,10 +22,20 @@ export async function runIngestionWorker(
   const ai = getAiBookProvider();
   const storage = { downloadBase64: downloadPdfBase64 };
 
+  const startedAt = Date.now();
+
   return drainQueue(
     {
       claim: claimNextJob,
-      run: (job) => processJob(job, { repo, storage, ai, now: () => new Date() }),
+      // Each job is aborted before the route maxDuration so a late call never outlives the request.
+      run: (job) =>
+        processJob(job, {
+          repo,
+          storage,
+          ai,
+          now: () => new Date(),
+          signal: AbortSignal.timeout(jobTimeoutMs({ startedAt, now: Date.now() })),
+        }),
       now: () => Date.now(),
     },
     { maxJobs: opts.maxJobs ?? DEFAULT_MAX_JOBS, budgetMs: opts.budgetMs ?? DEFAULT_BUDGET_MS },

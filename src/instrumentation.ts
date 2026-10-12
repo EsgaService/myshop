@@ -1,3 +1,4 @@
+import { aiBootIssue } from "@/lib/ai/boot-check";
 import { paymentsBootIssue } from "@/lib/payments/boot-check";
 
 /**
@@ -7,4 +8,6 @@ import { paymentsBootIssue } from "@/lib/payments/boot-check";
 export function register() {
   const issue = paymentsBootIssue(process.env);
   if (issue) console.error(`[config] ${issue}`);
+  const aiIssue = aiBootIssue(process.env);
+  if (aiIssue) console.error(`[config] ${aiIssue}`);
 }

@@ -64,6 +64,17 @@ describe("processJob", () => {
     expect(deps.repo.markRetry).not.toHaveBeenCalled();
   });
 
+  it("fails immediately, without retry, on a non-retryable provider error", async () => {
+    const deps = makeDeps({
+      ai: { extractBook: vi.fn(async () => { throw new AiProviderError("truncated", { retryable: false }); }) },
+    });
+    const result = await processJob(job(1, 3), deps);
+
+    expect(result).toEqual({ outcome: "failed", error: "truncated" });
+    expect(deps.repo.markFailed).toHaveBeenCalledWith("job1", "up1", "truncated");
+    expect(deps.repo.markRetry).not.toHaveBeenCalled();
+  });
+
   it("treats schema-invalid output as a failure without persisting anything (R13)", async () => {
     const deps = makeDeps({ ai: { extractBook: vi.fn(async () => ({ title: "x", recipes: [] })) } });
     const result = await processJob(job(3, 3), deps);

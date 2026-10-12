@@ -8,10 +8,17 @@ export interface AiBookProvider {
   extractBook(input: { pdfBase64: string; fileName: string; signal?: AbortSignal }): Promise<unknown>;
 }
 
-/** Provider-level failure (transport, refusal, malformed output). Message is safe to store. */
+/**
+ * Provider-level failure (transport, refusal, malformed output). Message is safe to store.
+ * `retryable: false` marks failures a retry cannot fix (e.g. truncated output): they are
+ * never paid for twice.
+ */
 export class AiProviderError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  readonly retryable: boolean;
+
+  constructor(message: string, options?: { cause?: unknown; retryable?: boolean }) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.name = "AiProviderError";
+    this.retryable = options?.retryable ?? true;
   }
 }

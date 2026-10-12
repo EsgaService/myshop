@@ -64,7 +64,7 @@ export async function processJob(job: IngestionJob, deps: ProcessJobDeps): Promi
     return { outcome: "succeeded", bookId };
   } catch (error) {
     const message = safeMessage(error);
-    const permanent = error instanceof PermanentError;
+    const permanent = error instanceof PermanentError || (error instanceof AiProviderError && !error.retryable);
 
     if (!permanent && job.attempts < job.max_attempts) {
       const runAfter = new Date(deps.now().getTime() + retryDelayMs(job.attempts));

@@ -5,8 +5,13 @@ import { AiProviderError, type AiBookProvider } from "./types";
 
 export const TOOL_NAME = "save_recipe_book";
 export const DEFAULT_MODEL = "claude-sonnet-5-5";
-const CLIENT_TIMEOUT_MS = 240_000;
-const MAX_RETRIES = 2;
+/**
+ * Every call is billed, so the SDK never retries on its own (retries are owned by the job queue,
+ * which bounds them) and a single call is cut off well before the route maxDuration (300s).
+ */
+export const CLIENT_MAX_RETRIES = 0;
+export const CLIENT_TIMEOUT_MS = 180_000;
+export const REQUEST_TIMEOUT_MS = 180_000;
 const MAX_TOKENS = 16_000;
 
 /** Minimal slice of the SDK we use, so tests can inject a fake (no network). */
@@ -32,11 +37,14 @@ export class AnthropicBookProvider implements AiBookProvider {
 
   constructor(opts: { apiKey?: string; model?: string; client?: AnthropicLike }) {
     this.client =
-      opts.client ?? new Anthropic({ apiKey: opts.apiKey, timeout: CLIENT_TIMEOUT_MS, maxRetries: MAX_RETRIES });
+      opts.client ?? new Anthropic({ apiKey: opts.apiKey, timeout: CLIENT_TIMEOUT_MS, maxRetries: CLIENT_MAX_RETRIES });
     this.model = opts.model || DEFAULT_MODEL;
   }
 
   async extractBook(input: { pdfBase64: string; fileName: string; signal?: AbortSignal }): Promise<unknown> {
+    // Streaming responses are not covered by the client timeout once headers arrive, so bound the whole call.
+    const signals = [AbortSignal.timeout(REQUEST_TIMEOUT_MS), ...(input.signal ? [input.signal] : [])];
+    const signal = AbortSignal.any(signals);
     let message;
     try {
       message = await this.client.messages
@@ -62,11 +70,17 @@ export class AnthropicBookProvider implements AiBookProvider {
               },
             ],
           },
-          { signal: input.signal },
+          { signal },
         )
         .finalMessage();
     } catch (cause) {
       throw new AiProviderError("The AI provider request failed", { cause });
+    }
+
+    if (message.stop_reason === "max_tokens") {
+      throw new AiProviderError("El PDF es demasiado extenso para convertirlo en un solo recetario. Divídelo en partes más pequeñas.", {
+        retryable: false,
+      });
     }
 
     const block = message.content.find((c) => c.type === "tool_use" && c.name === TOOL_NAME);

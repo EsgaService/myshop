@@ -28,6 +28,15 @@ describe("getAiBookProvider", () => {
   it("returns the anthropic provider with a key", () => {
     expect(getAiBookProvider({ ANTHROPIC_API_KEY: "sk-test" }).id).toBe("anthropic");
   });
+  it("refuses the mock provider in production, implicit or explicit", () => {
+    expect(() => getAiBookProvider({ NODE_ENV: "production" })).toThrow(/mock/i);
+    expect(() => getAiBookProvider({ NODE_ENV: "production", AI_PROVIDER: "mock", ANTHROPIC_API_KEY: "k" })).toThrow(/mock/i);
+  });
+  it("allows the mock provider outside production and anthropic inside it", () => {
+    expect(getAiBookProvider({ NODE_ENV: "development" }).id).toBe("mock");
+    expect(getAiBookProvider({ NODE_ENV: "test" }).id).toBe("mock");
+    expect(getAiBookProvider({ NODE_ENV: "production", ANTHROPIC_API_KEY: "sk" }).id).toBe("anthropic");
+  });
   it("refuses anthropic without a key", () => {
     expect(() => getAiBookProvider({ AI_PROVIDER: "anthropic" })).toThrow(/ANTHROPIC_API_KEY/);
   });
