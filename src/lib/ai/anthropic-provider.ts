@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { AiBookSchema, parseAiBook } from "@/lib/ingestion/ai-book-schema";
+import { toStructuredOutputSchema } from "./structured-output-schema";
 import { AiProviderError, type AiBookProvider } from "./types";
 
-export const TOOL_NAME = "save_recipe_book";
 export const DEFAULT_MODEL = "claude-sonnet-5-5";
 /**
  * Every call is billed, so the SDK never retries on its own (retries are owned by the job queue,
@@ -19,15 +19,40 @@ export type AnthropicLike = Pick<Anthropic, "messages">;
 
 const PROMPT = [
   "Convierte este PDF de recetas en un recetario estructurado.",
-  `Llama a la herramienta ${TOOL_NAME} con el resultado; no respondas con texto libre.`,
+  "Responde únicamente con el recetario como un objeto JSON que cumpla el esquema indicado; no añadas texto adicional.",
   "Conserva el idioma original del documento. Incluye todas las recetas con ingredientes y pasos completos.",
   "Agrupa las recetas en categorías cuando el documento lo sugiera y usa las secciones para texto introductorio o de apoyo.",
   "No inventes recetas, ingredientes ni cantidades que no aparezcan en el documento.",
 ].join("\n");
 
-function toolInputSchema(): Anthropic.Tool.InputSchema {
-  const { $schema: _ignored, ...schema } = z.toJSONSchema(AiBookSchema, { io: "input" }) as Record<string, unknown>;
-  return schema as Anthropic.Tool.InputSchema;
+function outputSchema(): Record<string, unknown> {
+  return toStructuredOutputSchema(z.toJSONSchema(AiBookSchema, { io: "input" }) as Record<string, unknown>);
+}
+
+const PERMANENT_MESSAGE = "No pudimos procesar este PDF con la IA. Revisa el archivo o inténtalo con otro.";
+const TRANSIENT_MESSAGE = "El servicio de IA no está disponible en este momento. Lo intentaremos de nuevo.";
+const REFUSAL_MESSAGE = "La IA no pudo procesar este documento. Revisa el archivo o inténtalo con otro.";
+const EMPTY_OUTPUT_MESSAGE = "La IA no devolvió un recetario. Lo intentaremos de nuevo.";
+const UNREADABLE_OUTPUT_MESSAGE = "La IA devolvió una respuesta que no pudimos leer. Lo intentaremos de nuevo.";
+const INVALID_BOOK_MESSAGE = "La IA devolvió un recetario con un formato inválido. Lo intentaremos de nuevo.";
+
+/** 4xx client errors never succeed on retry, except request timeout (408), conflict (409) and rate limit (429). */
+function isPermanentApiError(error: unknown): boolean {
+  return (
+    error instanceof Anthropic.APIError &&
+    typeof error.status === "number" &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    ![408, 409, 429].includes(error.status)
+  );
+}
+
+/** Full technical detail, for server logs only. It must never reach a seller-facing message. */
+function describeCause(error: unknown): string {
+  if (error instanceof Anthropic.APIError) {
+    return `${error.status ?? "no status"}: ${error.message} (request_id: ${error.requestID ?? "n/a"})`.slice(0, 800);
+  }
+  return (error instanceof Error ? error.message : String(error)).slice(0, 800);
 }
 
 export class AnthropicBookProvider implements AiBookProvider {
@@ -52,14 +77,7 @@ export class AnthropicBookProvider implements AiBookProvider {
           {
             model: this.model,
             max_tokens: MAX_TOKENS,
-            tools: [
-              {
-                name: TOOL_NAME,
-                description: "Guarda el recetario estructurado extraído del PDF.",
-                input_schema: toolInputSchema(),
-              },
-            ],
-            tool_choice: { type: "tool", name: TOOL_NAME },
+            output_config: { format: { type: "json_schema", schema: outputSchema() } },
             messages: [
               {
                 role: "user",
@@ -74,7 +92,9 @@ export class AnthropicBookProvider implements AiBookProvider {
         )
         .finalMessage();
     } catch (cause) {
-      throw new AiProviderError("The AI provider request failed", { cause });
+      console.error("[ai] Anthropic request failed:", describeCause(cause));
+      const permanent = isPermanentApiError(cause);
+      throw new AiProviderError(permanent ? PERMANENT_MESSAGE : TRANSIENT_MESSAGE, { cause, retryable: !permanent });
     }
 
     if (message.stop_reason === "max_tokens") {
@@ -83,13 +103,26 @@ export class AnthropicBookProvider implements AiBookProvider {
       });
     }
 
-    const block = message.content.find((c) => c.type === "tool_use" && c.name === TOOL_NAME);
-    if (!block || block.type !== "tool_use") {
-      throw new AiProviderError("The AI provider did not return a structured book");
+    if (message.stop_reason === "refusal") {
+      throw new AiProviderError(REFUSAL_MESSAGE, { retryable: false });
     }
 
-    const parsed = parseAiBook(block.input);
-    if (!parsed.ok) throw new AiProviderError(`The AI output did not match the book schema: ${parsed.error}`);
+    const text = message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
+    if (!text.trim()) throw new AiProviderError(EMPTY_OUTPUT_MESSAGE);
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (cause) {
+      console.error("[ai] Anthropic returned invalid JSON:", describeCause(cause));
+      throw new AiProviderError(UNREADABLE_OUTPUT_MESSAGE, { cause });
+    }
+
+    const parsed = parseAiBook(raw);
+    if (!parsed.ok) {
+      console.error("[ai] AI output did not match the book schema:", parsed.error);
+      throw new AiProviderError(INVALID_BOOK_MESSAGE);
+    }
     return parsed.data;
   }
 }
