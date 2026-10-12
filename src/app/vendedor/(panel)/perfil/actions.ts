@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSeller } from "@/lib/auth/guards";
+import { decideSlugChange, SLUG_LOCKED_MESSAGE } from "@/lib/seller/decide-slug-change";
+import { countPublishedBooks } from "@/lib/seller/published-count";
 import { parseSellerProfile, SELLER_SLUG_TAKEN_MESSAGE } from "@/lib/seller/profile-schema";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -19,6 +21,14 @@ export async function updateSellerProfile(_prev: SellerProfileFormState, formDat
   const { seller } = await requireSeller();
   const parsed = parseSellerProfile(Object.fromEntries(formData.entries()));
   if (!parsed.ok) return { status: "error", errors: parsed.errors };
+
+  // The slug is part of every shared book URL: frozen while any book is published.
+  const slugDecision = decideSlugChange({
+    currentSlug: seller.slug,
+    newSlug: parsed.value.slug,
+    publishedBookCount: parsed.value.slug === seller.slug ? 0 : await countPublishedBooks(seller.id),
+  });
+  if (!slugDecision.ok) return { status: "error", errors: { slug: SLUG_LOCKED_MESSAGE } };
 
   const { error } = await createAdminClient().from("sellers").update(parsed.value).eq("id", seller.id);
   if (error) {

@@ -14,7 +14,7 @@ type Values = {
   whatsapp: string;
 };
 
-export function SellerProfileForm({ initial, email }: { initial: Values; email: string }) {
+export function SellerProfileForm({ initial, email, slugLocked }: { initial: Values; email: string; slugLocked: boolean }) {
   const [state, action, pending] = useActionState<SellerProfileFormState, FormData>(updateSellerProfile, { status: "idle" });
   const errors = state.errors ?? {};
 
@@ -29,10 +29,23 @@ export function SellerProfileForm({ initial, email }: { initial: Values; email: 
       <Field
         label="Enlace de tu tienda"
         htmlFor="slug"
-        hint="Aparece en la dirección de tu tienda. Si lo cambias, los enlaces que ya compartiste dejarán de funcionar."
+        hint={
+          slugLocked
+            ? "No se puede cambiar mientras tengas recetarios publicados, porque los enlaces que ya compartiste dejarían de funcionar."
+            : "Aparece en la dirección de tu tienda. Si lo cambias, los enlaces que ya compartiste dejarán de funcionar."
+        }
         error={errors.slug}
       >
-        <Input id="slug" name="slug" defaultValue={initial.slug} maxLength={40} required autoCapitalize="none" spellCheck={false} />
+        <Input
+          id="slug"
+          name="slug"
+          defaultValue={initial.slug}
+          maxLength={40}
+          required
+          readOnly={slugLocked}
+          autoCapitalize="none"
+          spellCheck={false}
+        />
       </Field>
       <Field label="Descripción (opcional)" htmlFor="bio" error={errors.bio}>
         <textarea
