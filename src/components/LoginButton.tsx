@@ -3,7 +3,23 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-export function LoginButton({ next = "/", label = "Entrar con Google", className = "" }: { next?: string; label?: string; className?: string }) {
+type Intent = "buyer" | "seller";
+
+/**
+ * Google sign-in. `as` records which auth screen was used; the server applies it
+ * only when the account does not exist yet and never changes an existing role.
+ */
+export function LoginButton({
+  next = "/",
+  as,
+  label = "Continuar con Google",
+  className = "",
+}: {
+  next?: string;
+  as?: Intent;
+  label?: string;
+  className?: string;
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -11,9 +27,11 @@ export function LoginButton({ next = "/", label = "Entrar con Google", className
     setLoading(true);
     setError(null);
     const supabase = createClient();
+    const params = new URLSearchParams({ next });
+    if (as) params.set("as", as);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+      options: { redirectTo: `${window.location.origin}/auth/callback?${params.toString()}` },
     });
     if (error) {
       setError("No pudimos iniciar sesión. Inténtalo de nuevo.");
@@ -31,7 +49,7 @@ export function LoginButton({ next = "/", label = "Entrar con Google", className
       >
         {loading ? "Redirigiendo…" : label}
       </button>
-      {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
     </div>
   );
 }
