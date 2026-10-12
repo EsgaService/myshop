@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Book, BookWithSeller, Category, Profile, Recipe, Section, Seller, SellerUpload, UploadJob } from "./types";
 
@@ -48,12 +49,14 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
   return (data as Profile | null) ?? null;
 });
 
-/** The seller row owned by the current user, if any. */
+/**
+ * The seller row owned by the current user, if any. Clients cannot read `sellers.user_id`
+ * (column-level grant), so the owner lookup uses the service role keyed by the verified session user.
+ */
 export const getMySeller = cache(async (): Promise<Seller | null> => {
   const user = await getCurrentUser();
   if (!user) return null;
-  const supabase = await createClient();
-  const { data } = await supabase.from("sellers").select(SELLER_COLUMNS).eq("user_id", user.id).maybeSingle();
+  const { data } = await createAdminClient().from("sellers").select(SELLER_COLUMNS).eq("user_id", user.id).maybeSingle();
   return (data as Seller | null) ?? null;
 });
 
