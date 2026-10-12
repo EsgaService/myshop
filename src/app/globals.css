@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+:root {
+  --brand-primary: #1f2937;
+  --brand-secondary: #f59e0b;
+  --brand-bg: #ffffff;
+  --brand-text: #111827;
+  --brand-font: Inter, system-ui, sans-serif;
+}
+
+body {
+  background: var(--brand-bg);
+  color: var(--brand-text);
+  font-family: var(--brand-font);
+}
+
+@theme inline {
+  --color-brand: var(--brand-primary);
+  --color-accent: var(--brand-secondary);
+  --color-surface: var(--brand-bg);
+  --color-ink: var(--brand-text);
+}

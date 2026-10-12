@@ -1,0 +1,43 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# env files: never commit real secrets, only the example
+.env*
+!.env.example
+
+# keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+client_secret*.json
+service-account*.json
+
+# supabase cli local state
+supabase/.temp/
+supabase/.branches/
+
+# local agent/tooling config (personal, may hold tokens)
+.claude/settings.local.json
+.atl/
+
+# testing
+/coverage
+
+# editors
+.idea/
+.vscode/
+
+# misc
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+.vercel
+*.log
+npm-debug.log*
