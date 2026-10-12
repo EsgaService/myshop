@@ -3,10 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const PDF_BUCKET = "seller-pdfs";
 
-/** Object path convention: `{seller_id}/{upload_id}.pdf`. */
-export function pdfPath(sellerId: string, uploadId: string): string {
-  return `${sellerId}/${uploadId}.pdf`;
-}
+export { pdfPath } from "./pdf-path";
 
 export async function createPdfUploadUrl(path: string): Promise<{ signedUrl: string; token: string }> {
   const { data, error } = await createAdminClient().storage.from(PDF_BUCKET).createSignedUploadUrl(path);
