@@ -132,7 +132,7 @@ begin
   -- All uploads ready, jobs succeeded.
   assert (select count(*) from public.book_uploads where book_id = v_book and status = 'ready') = 3,
     'CHECK FAILED: uploads not marked ready';
-  assert (select count(*) from public.ingestion_jobs where status = 'succeeded') = 3,
+  assert (select count(*) from public.ingestion_jobs where status = 'succeeded' and upload_id in (v_p1, v_p2, v_p3)) = 3,
     'CHECK FAILED: jobs not marked succeeded';
 
   -- Teaser = teaser of the earliest active ready upload (P1), even though P2 finished first.
