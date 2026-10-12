@@ -19,4 +19,17 @@ export function getPaymentProvider(
   throw new PaymentsDisabledError("No payment provider is configured");
 }
 
+/** Non-throwing variant for pages: null means checkout is unavailable in this environment. */
+export function tryGetPaymentProvider(
+  mode: string | undefined = process.env.PAYMENTS_MODE,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): PaymentProvider | null {
+  try {
+    return getPaymentProvider(mode, nodeEnv);
+  } catch (e) {
+    if (e instanceof PaymentsDisabledError) return null;
+    throw e;
+  }
+}
+
 export * from "./types";

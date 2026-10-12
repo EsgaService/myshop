@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 /** Mock checkout form: any value is accepted. Real gateways redirect to a hosted page instead. */
-export function PayForm({ slug }: { slug: string }) {
+export function PayForm({ bookId }: { bookId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -13,7 +13,7 @@ export function PayForm({ slug }: { slug: string }) {
     setError(null);
     const form = Object.fromEntries(new FormData(e.currentTarget).entries());
     try {
-      const res = await fetch(`/api/pay/${slug}`, {
+      const res = await fetch(`/api/pay/book/${bookId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),

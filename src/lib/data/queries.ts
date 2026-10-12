@@ -134,6 +134,13 @@ export const getBookBySlugs = cache(async (sellerSlug: string, bookSlug: string)
   return { ...(data as unknown as Book), seller: { id, slug, store_name, is_platform } };
 });
 
+/** A book by id, with its seller. RLS decides visibility (published + live seller, own book, or purchased). */
+export async function getBookById(bookId: string): Promise<BookWithSeller | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("books").select(BOOK_WITH_SELLER).eq("id", bookId).maybeSingle();
+  return (data as unknown as BookWithSeller | null) ?? null;
+}
+
 /** Book ids the current user purchased. RLS limits rows to the caller. */
 export const listPurchasedBookIds = cache(async (): Promise<Set<string>> => {
   const user = await getCurrentUser();
