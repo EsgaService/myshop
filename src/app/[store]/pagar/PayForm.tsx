@@ -49,7 +49,7 @@ export function PayForm({ slug }: { slug: string }) {
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-full bg-brand px-6 py-3 font-semibold text-white disabled:opacity-60"
+        className="w-full rounded-full bg-book-primary px-6 py-3 font-semibold text-white disabled:opacity-60"
       >
         {busy ? "Procesando…" : "Pagar y entrar al recetario"}
       </button>

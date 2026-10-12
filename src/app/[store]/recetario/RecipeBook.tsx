@@ -53,7 +53,7 @@ export function RecipeBook({ storeSlug, storeName, categories, sections, recipes
   const open = recipes.find((r) => r.slug === openSlug) ?? null;
 
   const navBtn = (active: boolean) =>
-    `whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${active ? "bg-brand text-white" : "bg-black/5 hover:bg-black/10"}`;
+    `whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${active ? "bg-book-primary text-white" : "bg-black/5 hover:bg-black/10"}`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
@@ -257,7 +257,7 @@ function RecipeDialog({ storeSlug, recipe, onClose }: { storeSlug: string; recip
             </section>
           )}
 
-          <button type="button" onClick={() => setCooking(true)} className="w-full rounded-full bg-brand px-6 py-3 font-semibold text-white">
+          <button type="button" onClick={() => setCooking(true)} className="w-full rounded-full bg-book-primary px-6 py-3 font-semibold text-white">
             Modo cocina
           </button>
         </div>

@@ -26,7 +26,7 @@ export default async function StoreLayout({ children, params }: { children: Reac
       <SiteHeader currentSlug={store.slug} />
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
       <link rel="stylesheet" href={`https://fonts.googleapis.com/css2?family=${encodeURIComponent(store.font).replace(/%20/g, "+")}:wght@400;600;700&display=swap`} />
-      <div style={vars} className="min-h-[calc(100dvh-57px)] bg-surface text-ink [font-family:var(--brand-font)]">
+      <div style={vars} className="min-h-[calc(100dvh-57px)] bg-book-surface text-book-ink [font-family:var(--brand-font)]">
         {children}
       </div>
     </>
