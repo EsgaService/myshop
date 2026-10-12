@@ -11,6 +11,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Two EXCLUSIVE account roles, `buyer` and `seller`, stored in `profiles.role` (source of truth, mirrored to `app_metadata.role` on creation). Guards read `profiles`, never the JWT.
 - The role is chosen by the sign-in screen used the first time (`/ingresar` = buyer, `/vendedor/ingresar` = seller) and can never change afterwards. Legacy users with purchases are forced to buyer. A seller cannot buy (`purchases_buyer_only` trigger + `decide-purchase.ts`).
 - A seller pays a monthly subscription (`SELLER_PLAN`: 50.000 COP/month, `src/lib/seller/decide-subscription.ts`). Without an active period, the seller's books are hidden from `/explorar` and cannot be published; buyers who already purchased keep access.
+- Uploading PDFs and retrying a failed ingestion REQUIRE an active subscription (the AI costs money); before paying a seller can still edit the store profile. Manual retries are capped at 3 per upload. The store slug is locked while any book is published.
 - A seller uploads up to 12 PDFs (max 20 MB each). Each upload becomes a draft book via the AI pipeline. The seller sets the price (5.000 to 1.000.000 COP), publishes and shares the link `/<seller>/<book>`.
 - The platform seller (slug `myshop`, `is_platform`) owns the legacy books `cocteles` and `micheladas`.
 
@@ -41,11 +42,14 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 
 - `profiles` (role, display data), `sellers` (slug, store profile, `is_platform`), `subscriptions` (paid periods), `books` (draft/published/archived, price, branding, `upload_id`, `legacy_store_id`), `book_uploads` (PDF in bucket `seller-pdfs`, max 12 active per seller enforced by trigger), `ingestion_jobs` (Postgres queue).
 - `recipe_categories`, `recipes`, `book_sections`, `purchases` are keyed by `book_id`. Legacy rows reuse `stores.id` as `books.id`; `stores` and `store_id` are kept (nullable) for rollback and for `npm run import:book`.
-- RPCs (service role only): `claim_ingestion_job()` (SKIP LOCKED) and `create_book_from_ingestion()` (atomic, idempotent per upload).
+- RPCs (service role only): `claim_ingestion_job()` (SKIP LOCKED; stale jobs are reclaimed only while `attempts < max_attempts`, max 3 jobs running at once), `create_book_from_ingestion()` (atomic, idempotent per upload) and `grant_subscription_period()` (per-seller lock, idempotent per `provider_ref`, month-end anchored).
+- `sellers.user_id` is NOT readable by `anon`/`authenticated` (column-level SELECT grant). Owner lookups use the service role keyed by the session user (`getMySeller`); RLS uses the `private.my_seller_id()` definer helper.
+- A removed PENDING upload keeps its slot for 2 hours (signed upload token TTL): `holdsUploadSlot()` and the `enforce_upload_limit` trigger.
+- `teaser.sample` stores only title and ingredients, never steps.
 
 ## AI ingestion
 
-- Port `AiBookProvider` in `src/lib/ai/` with `mock` (deterministic fixture) and `anthropic` adapters. Selection: `AI_PROVIDER`, else `ANTHROPIC_API_KEY` set means anthropic, else mock. Model: `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`). Output is forced through one tool and validated with Zod in the service (`src/lib/ingestion/ai-book-schema.ts`).
+- Port `AiBookProvider` in `src/lib/ai/` with `mock` (deterministic fixture) and `anthropic` adapters. Selection: `AI_PROVIDER`, else `ANTHROPIC_API_KEY` set means anthropic, else mock. The mock is REFUSED in production (`getAiBookProvider` throws, `src/instrumentation.ts` logs at boot). The SDK never retries (`maxRetries: 0`, 180s per call, aborted before the route `maxDuration`); a `max_tokens` stop is a non-retryable failure. Model: `ANTHROPIC_MODEL` (default `claude-sonnet-5-5`). Output is forced through one tool and validated with Zod in the service (`src/lib/ingestion/ai-book-schema.ts`).
 - Worker: `runIngestionWorker()` (`src/lib/ingestion/worker.ts`) claims jobs and runs `processJob` (retry with backoff, max 3 attempts). It is kicked with `after()` from `confirmUpload` and from the polling GET when a job is stuck. `/api/ingestion/run` (Bearer secret) is for a cron trigger in production.
 
 ## Architecture rules (do not break)
@@ -61,7 +65,8 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 
 - Project ref `ihbmaydqjsoynsiugzfv`. The MCP server `supabase-myshop` is configured in `.mcp.json`.
 - Applied on 2026-10-11: migration `init_schema`, `seed.sql`, `seed-books/*.sql` (micheladas: 22 recipes; cocteles: 27 recipes).
-- Applied on 2026-10-12: migrations `marketplace_schema`, `marketplace_rls`, `marketplace_books_policy_fix` (the last one adds `private.has_purchased()` and the anon read policy for listed books). Checks in `supabase/tests/marketplace_rls_checks.sql`.
+- Applied on 2026-10-12: migrations `marketplace_schema`, `marketplace_rls`, `marketplace_books_policy_fix` (the last one adds `private.has_purchased()` and the anon read policy for listed books). Checks in `supabase/tests/marketplace_rls_checks.sql` (ends with `ALL_CHECKS_PASSED`).
+- Migration `20261012130000_marketplace_review_fixes.sql` (claim bounds, `manual_retries`, upload slot rule, `grant_subscription_period`, `sellers` column grants, teaser scrub) is validated against a local Postgres 17 but must be applied with the Supabase MCP `apply_migration` (or Dashboard); record the date here once applied.
 - Bucket `seller-pdfs` is private, 20 MB, PDF only, no `storage.objects` client policies (uploads use signed upload URLs).
 - Not yet verified with real sessions: buyer reading purchased recipes, seller flows end to end.
 
@@ -87,7 +92,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Legal text in `/privacidad` and `/terminos` is a PLACEHOLDER (`src/lib/legal/content.ts`). **A lawyer must review it** (Colombia's Ley 1581 de 2012 applies to personal data).
 - Landing copy says payments go through "pasarelas de pago" while only the mock exists: needs legal/marketing review.
 - Price bounds (5.000 to 1.000.000 COP), the 20 MB limit and the 12-upload cap are assumptions.
-- Changing a seller slug breaks previously shared links (no redirect history).
+- Changing a seller slug breaks previously shared links (no redirect history): the slug is locked while any book is published, but a seller who unpublishes everything can still change it.
 - Very large PDFs (over about 100 pages) may exceed model limits; the job fails with a readable error.
 - Photos: the `recipe-photos` bucket is public, so anyone with a direct photo URL can see the photo without paying. The recipe text stays protected.
 - No real payment gateway yet, only the mock.

@@ -6,7 +6,7 @@ Sellers upload recipe PDFs, an AI turns them into interactive recipe books, and 
 
 - `/` public landing. `/ingresar` buyer sign-in, `/vendedor/ingresar` seller sign-in.
 - Buyers: `/explorar` (marketplace), `/<seller>/<book>` (product page), `/<seller>/<book>/pagar` (checkout), `/<seller>/<book>/recetario` (interactive book), `/mis-recetarios` (library).
-- Sellers: `/vendedor` (dashboard), `/vendedor/productos` (upload PDFs, set price, publish, copy share link), `/vendedor/suscripcion` (monthly plan, required to publish and be listed), `/vendedor/perfil`.
+- Sellers: `/vendedor` (dashboard), `/vendedor/productos` (upload PDFs, set price, publish, copy share link), `/vendedor/suscripcion` (monthly plan, required to upload PDFs, publish and be listed), `/vendedor/perfil`.
 - `/privacidad` and `/terminos` are placeholders pending legal review.
 - Legacy `/cocteles/**` and `/micheladas/**` redirect (308) to `/myshop/<slug>/**`.
 - Access decisions live in `src/lib/access/decide-access.ts` and `src/lib/auth/decide-area.ts` (pure, unit-tested).
@@ -51,7 +51,7 @@ npm run build
 
 ## AI ingestion
 
-A seller uploads a PDF straight to the private `seller-pdfs` bucket through a signed URL. Confirming the upload enqueues a row in `ingestion_jobs`; the worker (`src/lib/ingestion/worker.ts`) is kicked in-process with `after()`, claims the job with `claim_ingestion_job()` and sends the PDF to the `AiBookProvider`. The structured result is validated with Zod and stored atomically by `create_book_from_ingestion()` as a draft book. Failures retry with backoff (3 attempts), then show a readable error. In production, schedule a cron calling `POST /api/ingestion/run` with `Authorization: Bearer $INGESTION_WORKER_SECRET` as a safety net.
+A seller uploads a PDF straight to the private `seller-pdfs` bucket through a signed URL. Confirming the upload enqueues a row in `ingestion_jobs`; the worker (`src/lib/ingestion/worker.ts`) is kicked in-process with `after()`, claims the job with `claim_ingestion_job()` and sends the PDF to the `AiBookProvider`. The structured result is validated with Zod and stored atomically by `create_book_from_ingestion()` as a draft book. Uploading and retrying require an active subscription because every run is billed by the AI provider. Failures retry with backoff (3 attempts, a stale job is never reclaimed past that), then show a readable error; the seller can retry manually up to 3 times per upload. At most 3 jobs run at once and every AI call is aborted before the route `maxDuration`. In production, schedule a cron calling `POST /api/ingestion/run` with `Authorization: Bearer $INGESTION_WORKER_SECRET` as a safety net.
 
 ## Payments
 
