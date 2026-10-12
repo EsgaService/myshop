@@ -91,7 +91,11 @@ export type UploadJob = {
   last_error: string | null;
 };
 
-/** A PDF uploaded by the current seller, with its ingestion job (if confirmed). */
+/**
+ * A PDF uploaded by the current seller, with its ingestion job (if confirmed).
+ * `book_id` is the product it belongs to (null only for legacy uploads created before products existed);
+ * a PDF is ingested when `status === "ready"`.
+ */
 export type SellerUpload = {
   id: string;
   original_name: string;

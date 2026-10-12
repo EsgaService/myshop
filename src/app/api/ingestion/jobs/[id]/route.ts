@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { getCurrentUser, getMySeller, getProfile } from "@/lib/data/queries";
 import { isUuid } from "@/lib/ids";
 import { shouldKickWorker } from "@/lib/ingestion/job-view";
+import { buildJobStatusBody } from "@/lib/ingestion/job-status-body";
 import { createKickGate } from "@/lib/ingestion/kick-gate";
 import { runIngestionWorker } from "@/lib/ingestion/worker";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -63,15 +64,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   return NextResponse.json(
-    {
-      id: job.id,
-      status: job.status,
-      uploadStatus: upload.status,
-      attempts: job.attempts,
-      maxAttempts: job.max_attempts,
-      error: job.status === "failed" ? job.last_error : null,
-      bookId: upload.book_id,
-    },
+    buildJobStatusBody(
+      {
+        id: job.id as string,
+        status: job.status as string,
+        attempts: job.attempts as number,
+        max_attempts: job.max_attempts as number,
+        last_error: (job.last_error as string | null) ?? null,
+      },
+      { status: upload.status as string, book_id: (upload.book_id as string | null) ?? null },
+    ),
     { headers: { "Cache-Control": "no-store" } },
   );
 }

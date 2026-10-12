@@ -19,7 +19,7 @@ export type UploadDeps = {
     storage_path: string;
     original_name: string;
     size_bytes: number;
-    book_id: string | null;
+    book_id: string;
   }): Promise<{ ok: true } | { ok: false; limit: boolean }>;
   createSignedUrl(path: string): Promise<{ signedUrl: string; token: string }>;
 };
@@ -63,12 +63,12 @@ const fail = (reason: UploadFailureReason): RequestUploadResult => ({ ok: false,
  * rejected request never leaves anything in storage.
  */
 export async function requestUploadCore(
-  input: { name: string; size: number; mime: string; bookId?: string },
+  input: { name: string; size: number; mime: string; bookId: string },
   deps: UploadDeps,
 ): Promise<RequestUploadResult> {
   if (!(await deps.hasActiveSubscription())) return fail("subscription_required");
 
-  if (input.bookId && !(await deps.isBookUsable(input.bookId))) return fail("product_not_found");
+  if (!(await deps.isBookUsable(input.bookId))) return fail("product_not_found");
 
   const activeCount = await deps.countActive();
   const check = checkUpload({ activeCount, size: input.size, mime: input.mime, name: input.name });
@@ -82,7 +82,7 @@ export async function requestUploadCore(
     storage_path: path,
     original_name: safeName(input.name),
     size_bytes: input.size,
-    book_id: input.bookId ?? null,
+    book_id: input.bookId,
   });
   if (!inserted.ok) return fail(inserted.limit ? "limit_reached" : "failed");
 

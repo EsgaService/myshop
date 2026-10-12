@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { requestUploadCore, uploadErrorMessage, type UploadDeps } from "./request-upload-core";
 
-const input = { name: "recetas.pdf", size: 1_000_000, mime: "application/pdf" };
+const bookId = "22222222-2222-4222-8222-222222222222";
+const input = { name: "recetas.pdf", size: 1_000_000, mime: "application/pdf", bookId };
 
 function makeDeps(over: Partial<UploadDeps> = {}): UploadDeps & { inserted: unknown[] } {
   const inserted: unknown[] = [];
@@ -22,29 +23,26 @@ function makeDeps(over: Partial<UploadDeps> = {}): UploadDeps & { inserted: unkn
 }
 
 describe("requestUploadCore with a target product (R1.2, R1.3)", () => {
-  const bookId = "22222222-2222-4222-8222-222222222222";
-
-  it("binds the upload to the product when bookId is provided", async () => {
+  it("binds the upload to the product", async () => {
     const deps = makeDeps();
-    const r = await requestUploadCore({ ...input, bookId }, deps);
+    const r = await requestUploadCore(input, deps);
     expect(r.ok).toBe(true);
     expect(deps.isBookUsable).toHaveBeenCalledWith(bookId);
     expect(deps.inserted[0]).toMatchObject({ seller_id: "seller-1", book_id: bookId });
   });
 
-  it("leaves book_id null when no product is given (legacy flow)", async () => {
-    const deps = makeDeps();
-    await requestUploadCore(input, deps);
-    expect(deps.inserted[0]).toMatchObject({ book_id: null });
-    expect(deps.isBookUsable).not.toHaveBeenCalled();
-  });
-
   it("denies a product the seller does not own and persists nothing", async () => {
     const deps = makeDeps({ isBookUsable: vi.fn().mockResolvedValue(false) });
-    const r = await requestUploadCore({ ...input, bookId }, deps);
+    const r = await requestUploadCore(input, deps);
     expect(r).toMatchObject({ ok: false, reason: "product_not_found" });
     expect(deps.insertUpload).not.toHaveBeenCalled();
     expect(deps.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("checks the product before counting slots or recording anything", async () => {
+    const deps = makeDeps({ isBookUsable: vi.fn().mockResolvedValue(false) });
+    await requestUploadCore(input, deps);
+    expect(deps.countActive).not.toHaveBeenCalled();
   });
 
   it("explains the missing product in Spanish", () => {

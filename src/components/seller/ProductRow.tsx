@@ -2,14 +2,27 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { bookPaths, storePath } from "@/lib/books/share-links";
-import type { Book } from "@/lib/data/types";
+import type { Book, SellerUpload } from "@/lib/data/types";
 import { CopyLinkButton } from "./CopyLinkButton";
+import { DeleteProductButton } from "./DeleteProductButton";
 import { PriceEditor } from "./PriceEditor";
+import { ProductPdfList } from "./ProductPdfList";
 import { PublishControl } from "./PublishControl";
 
-/** One book of the seller: status, price editor, publish toggle and share links (R5, R7, R9). */
-export function ProductRow({ book, sellerSlug, siteUrl }: { book: Book; sellerSlug: string; siteUrl: string }) {
+/** One product of the seller: its PDFs, status, price editor, publish toggle and share links (R5, R7, R9). */
+export function ProductRow({
+  book,
+  uploads,
+  sellerSlug,
+  siteUrl,
+}: {
+  book: Book;
+  uploads: SellerUpload[];
+  sellerSlug: string;
+  siteUrl: string;
+}) {
   const published = book.status === "published";
+  const canDelete = book.status === "draft" && uploads.length === 0;
   const paths = bookPaths(sellerSlug, book.slug);
 
   return (
@@ -22,6 +35,13 @@ export function ProductRow({ book, sellerSlug, siteUrl }: { book: Book; sellerSl
         <Badge tone={published ? "success" : "neutral"}>{published ? "Publicado" : "Borrador"}</Badge>
       </div>
 
+      <section aria-label={`PDF de ${book.title}`} className="space-y-2">
+        <h4 className="text-sm font-medium text-fg">
+          PDF del producto <span className="font-mono text-fg-muted">({uploads.length})</span>
+        </h4>
+        <ProductPdfList uploads={uploads} />
+      </section>
+
       <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
         <PriceEditor bookId={book.id} priceCents={book.price_cents} />
         <PublishControl bookId={book.id} published={published} />
@@ -30,6 +50,7 @@ export function ProductRow({ book, sellerSlug, siteUrl }: { book: Book; sellerSl
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4">
         <CopyLinkButton label="Copiar enlace de la tienda" path={storePath(sellerSlug)} siteUrl={siteUrl} />
         <CopyLinkButton label="Copiar enlace del recetario" path={paths.landing} siteUrl={siteUrl} />
+        {canDelete && <DeleteProductButton bookId={book.id} />}
         <Link href={`/vendedor/productos/${book.id}`} className="ml-auto text-sm font-medium text-primary hover:underline">
           Editar detalles
         </Link>

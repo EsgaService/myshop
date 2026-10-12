@@ -25,6 +25,8 @@ export function JobStatus({ upload }: { upload: SellerUpload }) {
   // Server data wins whenever the page re-renders with a fresh job.
   const job: PolledJob | null = polled ?? (upload.job ? { ...upload.job, error: upload.job.last_error } : null);
   const view = describeUpload({ uploadStatus: upload.status, job });
+  // Ready PDFs become removable once the removal RPC is wired (remove-from-product work unit).
+  const canRemove = view.canRemove && upload.status !== "ready";
   const error = job?.status === "failed" ? job.error : upload.status === "failed" ? upload.error : null;
 
   const jobId = upload.job?.id;
@@ -105,7 +107,7 @@ export function JobStatus({ upload }: { upload: SellerUpload }) {
             Reintentar
           </Button>
         )}
-        {view.canRemove && (
+        {canRemove && (
           <Button variant="ghost" className="h-9 px-4" disabled={pending} onClick={() => run(removeUpload)}>
             Eliminar
           </Button>

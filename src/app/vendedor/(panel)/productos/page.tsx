@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { JobStatus } from "@/components/seller/JobStatus";
 import { ProductRow } from "@/components/seller/ProductRow";
-import { UploadDropzone } from "@/components/seller/UploadDropzone";
+import { ProductUploader } from "@/components/seller/ProductUploader";
 import { Notice } from "@/components/ui/Notice";
 import { requireSeller } from "@/lib/auth/guards";
 import { listMyBooks, listMyUploads } from "@/lib/data/queries";
 import { getSellerAccess } from "@/lib/seller/access";
+import { groupUploadsByProduct } from "@/lib/seller/group-uploads";
 
 export const metadata = { title: "Productos" };
 // Server actions on this page enqueue and run the ingestion worker via after().
@@ -19,14 +20,15 @@ export default async function ProductsPage() {
     getSellerAccess(seller.id, seller.is_platform),
   ]);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-  // Uploads that already became a book are represented by their ProductRow.
-  const inProgress = uploads.filter((u) => !u.book_id && u.job?.status !== "succeeded");
+  // Each PDF is shown under its product. Legacy uploads without a product still need a place.
+  const { groups, orphans } = groupUploadsByProduct(books, uploads);
+  const orphansInProgress = orphans.filter((u) => u.job?.status !== "succeeded");
 
   return (
     <div className="space-y-10">
       <header>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Productos</h1>
-        <p className="mt-2 text-fg-muted">Sube tus PDF, revisa el recetario que genera la IA, ponle precio y publícalo.</p>
+        <p className="mt-2 text-fg-muted">Sube uno o varios PDF a un producto, revisa el recetario que genera la IA, ponle precio y publícalo.</p>
       </header>
 
       {!access.canSell && (
@@ -37,25 +39,31 @@ export default async function ProductsPage() {
         </Notice>
       )}
 
-      <UploadDropzone activeCount={uploads.length} canUpload={access.canSell} />
+      <ProductUploader
+        products={books.filter((b) => b.status !== "archived").map((b) => ({ id: b.id, title: b.title }))}
+        slotsHeld={uploads.length}
+        canUpload={access.canSell}
+      />
 
-      {inProgress.length > 0 && (
+      {orphansInProgress.length > 0 && (
         <section aria-labelledby="in-progress" className="space-y-3">
-          <h2 id="in-progress" className="font-display text-xl font-semibold">En proceso</h2>
-          {inProgress.map((upload) => (
+          <h2 id="in-progress" className="font-display text-xl font-semibold">Sin producto</h2>
+          {orphansInProgress.map((upload) => (
             <JobStatus key={upload.id} upload={upload} />
           ))}
         </section>
       )}
 
       <section aria-labelledby="books" className="space-y-4">
-        <h2 id="books" className="font-display text-xl font-semibold">Mis recetarios</h2>
+        <h2 id="books" className="font-display text-xl font-semibold">Mis productos</h2>
         {books.length === 0 ? (
           <p className="rounded-card border border-dashed border-border-strong p-8 text-center text-fg-muted">
-            Aún no tienes recetarios. Sube tu primer PDF para crear uno.
+            Aún no tienes productos. Sube tu primer PDF y ponle un nombre para crear uno.
           </p>
         ) : (
-          books.map((book) => <ProductRow key={book.id} book={book} sellerSlug={seller.slug} siteUrl={siteUrl} />)
+          groups.map(({ book, uploads: productUploads }) => (
+            <ProductRow key={book.id} book={book} uploads={productUploads} sellerSlug={seller.slug} siteUrl={siteUrl} />
+          ))
         )}
       </section>
     </div>

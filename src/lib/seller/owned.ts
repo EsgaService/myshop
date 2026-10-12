@@ -14,6 +14,7 @@ export type OwnedUpload = {
   id: string;
   storage_path: string;
   status: "pending" | "uploaded" | "processing" | "ready" | "failed";
+  /** The product the PDF belongs to. Set when the upload is requested: it does NOT mean "ingested" (use `status`). */
   book_id: string | null;
 };
 

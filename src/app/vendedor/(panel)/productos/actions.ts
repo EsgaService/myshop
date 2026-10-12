@@ -96,13 +96,13 @@ export async function requestUpload(input: {
   name: string;
   size: number;
   mime: string;
-  bookId?: string;
+  bookId: string;
 }): Promise<RequestUploadResult> {
   const { seller } = await requireSeller();
   const name = typeof input?.name === "string" ? input.name : "";
   const size = typeof input?.size === "number" ? input.size : 0;
   const mime = typeof input?.mime === "string" ? input.mime : "";
-  const bookId = typeof input?.bookId === "string" ? input.bookId : undefined;
+  const bookId = typeof input?.bookId === "string" ? input.bookId : "";
   const admin = createAdminClient();
 
   return requestUploadCore(
@@ -208,12 +208,15 @@ export async function retryIngestion(uploadId: string): Promise<SimpleResult> {
   return { ok: true };
 }
 
-/** Removes an unfinished or failed upload and frees its slot. Uploads that became a book are never removed here. */
+/**
+ * Removes an unfinished or failed upload and frees its slot. Removing a ready PDF (which also removes
+ * its recipes) is a separate, RPC-backed operation.
+ */
 export async function removeUpload(uploadId: string): Promise<SimpleResult> {
   const { seller } = await requireSeller();
   const upload = await getOwnedUpload(seller.id, uploadId);
   if (!upload) return { ok: false, message: "No encontramos ese archivo." };
-  if (upload.book_id || (upload.status !== "pending" && upload.status !== "failed")) {
+  if (upload.status !== "pending" && upload.status !== "failed") {
     return { ok: false, message: "Este archivo no se puede eliminar." };
   }
 
