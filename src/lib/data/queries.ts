@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { Book, BookWithSeller, Category, Profile, Recipe, Section, Seller, Store } from "./types";
+import type { Book, BookWithSeller, Category, Profile, Recipe, Section, Seller, SellerUpload, Store, UploadJob } from "./types";
 
 const STORE_COLUMNS =
   "id,slug,name,tagline,description,logo_url,cover_url,primary_color,secondary_color,background_color,text_color,font,price_cents,currency,teaser";
@@ -172,4 +172,32 @@ export const listMyBooks = cache(async (sellerId: string): Promise<Book[]> => {
     .eq("seller_id", sellerId)
     .order("created_at", { ascending: false });
   return (data ?? []) as unknown as Book[];
+});
+
+// ---------------------------------------------------------------------------
+// Seller uploads and ingestion (owner-only under RLS)
+// ---------------------------------------------------------------------------
+
+/** Active (not removed) uploads of the current seller, newest first. */
+export const listMyUploads = cache(async (sellerId: string): Promise<SellerUpload[]> => {
+  const supabase = await createClient();
+  const { data: uploads } = await supabase
+    .from("book_uploads")
+    .select("id,original_name,size_bytes,status,book_id,error,created_at")
+    .eq("seller_id", sellerId)
+    .is("removed_at", null)
+    .order("created_at", { ascending: false });
+  const rows = (uploads ?? []) as unknown as Omit<SellerUpload, "job">[];
+  if (rows.length === 0) return [];
+
+  // Two queries instead of an embedded resource: the one-to-one embed shape is easy to misread.
+  const { data: jobs } = await supabase
+    .from("ingestion_jobs")
+    .select("id,upload_id,status,attempts,max_attempts,last_error")
+    .in(
+      "upload_id",
+      rows.map((r) => r.id),
+    );
+  const byUpload = new Map((jobs ?? []).map((j) => [j.upload_id as string, j as unknown as UploadJob]));
+  return rows.map((r) => ({ ...r, job: byUpload.get(r.id) ?? null }));
 });

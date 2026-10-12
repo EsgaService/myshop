@@ -94,3 +94,27 @@ export type Book = {
 };
 
 export type BookWithSeller = Book & { seller: Pick<Seller, "id" | "slug" | "store_name" | "is_platform"> };
+
+export type UploadStatus = "pending" | "uploaded" | "processing" | "ready" | "failed";
+export type JobStatus = "queued" | "processing" | "succeeded" | "failed";
+
+export type UploadJob = {
+  id: string;
+  upload_id: string;
+  status: JobStatus;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+};
+
+/** A PDF uploaded by the current seller, with its ingestion job (if confirmed). */
+export type SellerUpload = {
+  id: string;
+  original_name: string;
+  size_bytes: number;
+  status: UploadStatus;
+  book_id: string | null;
+  error: string | null;
+  created_at: string;
+  job: UploadJob | null;
+};
