@@ -22,6 +22,11 @@ describe("buttonClasses", () => {
     expect(buttonClasses({ size: "lg" })).toContain("h-14");
   });
 
+  it("supports inverse variants for use on primary surfaces", () => {
+    expect(buttonClasses({ variant: "inverse" })).toContain("bg-surface");
+    expect(buttonClasses({ variant: "inverse-outline" })).toContain("border-white/40");
+  });
+
   it("appends extra classes", () => {
     expect(buttonClasses({ className: "w-full" })).toContain("w-full");
   });
