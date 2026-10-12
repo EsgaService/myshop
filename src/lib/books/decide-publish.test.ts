@@ -1,7 +1,36 @@
 import { describe, expect, it } from "vitest";
 import { decidePublish, publishErrorMessage } from "./decide-publish";
 
-const ok = { status: "draft" as const, priceCents: 1_990_000, canPublish: true };
+const ok = { status: "draft" as const, priceCents: 1_990_000, canPublish: true, readyPdfCount: 1, isLegacy: false };
+
+describe("decidePublish PDF gate (R5.1)", () => {
+  it("refuses a product with no ready PDF", () => {
+    expect(decidePublish({ ...ok, readyPdfCount: 0 })).toEqual({ ok: false, reason: "no_ready_pdf" });
+  });
+
+  it("allows a product with several ready PDFs", () => {
+    expect(decidePublish({ ...ok, readyPdfCount: 3 })).toEqual({ ok: true });
+  });
+
+  it("exempts legacy platform books, which have no uploads", () => {
+    expect(decidePublish({ ...ok, readyPdfCount: 0, isLegacy: true })).toEqual({ ok: true });
+  });
+
+  it("reports the subscription before the missing PDF", () => {
+    expect(decidePublish({ ...ok, readyPdfCount: 0, canPublish: false })).toEqual({
+      ok: false,
+      reason: "subscription_required",
+    });
+  });
+
+  it("reports the missing PDF before the price", () => {
+    expect(decidePublish({ ...ok, readyPdfCount: 0, priceCents: 0 })).toEqual({ ok: false, reason: "no_ready_pdf" });
+  });
+
+  it("has Spanish copy for the missing PDF", () => {
+    expect(publishErrorMessage("no_ready_pdf")).toMatch(/PDF listo/);
+  });
+});
 
 describe("decidePublish (R7, R9)", () => {
   it("allows a priced draft when the seller can publish", () => {
@@ -13,7 +42,7 @@ describe("decidePublish (R7, R9)", () => {
   });
 
   it("checks the subscription before the price so the CTA is always the first blocker", () => {
-    expect(decidePublish({ status: "draft", priceCents: 0, canPublish: false })).toEqual({
+    expect(decidePublish({ ...ok, priceCents: 0, canPublish: false })).toEqual({
       ok: false,
       reason: "subscription_required",
     });
@@ -34,7 +63,7 @@ describe("decidePublish (R7, R9)", () => {
 
 describe("publishErrorMessage", () => {
   it("returns neutral Spanish copy for every reason", () => {
-    for (const reason of ["subscription_required", "invalid_price", "archived"] as const) {
+    for (const reason of ["subscription_required", "invalid_price", "archived", "no_ready_pdf"] as const) {
       expect(publishErrorMessage(reason).length).toBeGreaterThan(10);
     }
     expect(publishErrorMessage("subscription_required")).toMatch(/suscripción/);

@@ -1,5 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PDF_BYTES, MAX_UPLOADS_PER_SELLER, UPLOAD_TOKEN_TTL_MS, checkUpload, holdsUploadSlot } from "./upload-limit";
+import {
+  MAX_PDF_BYTES,
+  MAX_UPLOADS_PER_SELLER,
+  UPLOAD_TOKEN_TTL_MS,
+  batchLimitMessage,
+  checkUpload,
+  decideBatchUpload,
+  holdsUploadSlot,
+} from "./upload-limit";
+
+describe("decideBatchUpload (R1.4)", () => {
+  it("accepts a batch that fits exactly in the remaining slots", () => {
+    expect(decideBatchUpload({ slotsHeld: 9, requested: 3 })).toEqual({ ok: true });
+    expect(decideBatchUpload({ slotsHeld: 0, requested: 12 })).toEqual({ ok: true });
+  });
+
+  it("rejects the whole batch when it exceeds the cap and reports the remaining slots", () => {
+    expect(decideBatchUpload({ slotsHeld: 11, requested: 2 })).toEqual({ ok: false, reason: "limit_reached", remaining: 1 });
+    expect(decideBatchUpload({ slotsHeld: 0, requested: 13 })).toEqual({ ok: false, reason: "limit_reached", remaining: 12 });
+  });
+
+  it("reports zero remaining when the seller is already full", () => {
+    expect(decideBatchUpload({ slotsHeld: 12, requested: 1 })).toEqual({ ok: false, reason: "limit_reached", remaining: 0 });
+    expect(decideBatchUpload({ slotsHeld: 15, requested: 1 })).toEqual({ ok: false, reason: "limit_reached", remaining: 0 });
+  });
+
+  it("rejects an empty batch", () => {
+    expect(decideBatchUpload({ slotsHeld: 0, requested: 0 })).toEqual({ ok: false, reason: "empty_batch" });
+  });
+});
+
+describe("batchLimitMessage", () => {
+  it("tells the seller how many PDFs still fit", () => {
+    expect(batchLimitMessage(0)).toMatch(/máximo de 12 PDF/);
+    expect(batchLimitMessage(1)).toMatch(/1 PDF más/);
+    expect(batchLimitMessage(3)).toMatch(/3 PDF más/);
+  });
+});
 
 const ok = { activeCount: 0, size: 1024, mime: "application/pdf", name: "recetas.pdf" };
 

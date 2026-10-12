@@ -2,7 +2,14 @@ import "server-only";
 import { isUuid } from "@/lib/ids";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export type OwnedBook = { id: string; slug: string; status: "draft" | "published" | "archived"; price_cents: number };
+export type OwnedBook = {
+  id: string;
+  slug: string;
+  status: "draft" | "published" | "archived";
+  price_cents: number;
+  /** Set for the legacy platform books, which have no uploads. */
+  legacy_store_id: string | null;
+};
 export type OwnedUpload = {
   id: string;
   storage_path: string;
@@ -18,7 +25,7 @@ export async function getOwnedBook(sellerId: string, bookId: unknown): Promise<O
   if (!isUuid(bookId)) return null;
   const { data, error } = await createAdminClient()
     .from("books")
-    .select("id,slug,status,price_cents")
+    .select("id,slug,status,price_cents,legacy_store_id")
     .eq("id", bookId)
     .eq("seller_id", sellerId)
     .maybeSingle();

@@ -18,8 +18,21 @@ describe("describeUpload (R12)", () => {
     expect(describeUpload({ uploadStatus: "uploaded", job: job("processing") })).toMatchObject({ label: "Procesando con IA", polling: true });
   });
 
-  it("stops polling on success", () => {
-    expect(describeUpload({ uploadStatus: "ready", job: job("succeeded") })).toMatchObject({ label: "Listo", polling: false, tone: "success" });
+  it("stops polling on success and allows removal once settled (R2.1)", () => {
+    expect(describeUpload({ uploadStatus: "ready", job: job("succeeded") })).toMatchObject({
+      label: "Listo",
+      polling: false,
+      tone: "success",
+      canRemove: true,
+      canRetry: false,
+    });
+  });
+
+  it("never allows removal while the job is in flight (R2.3)", () => {
+    for (const status of ["queued", "processing"] as const) {
+      expect(describeUpload({ uploadStatus: "uploaded", job: job(status) }).canRemove).toBe(false);
+    }
+    expect(describeUpload({ uploadStatus: "uploaded", job: null }).canRemove).toBe(false);
   });
 
   it("offers retry and removal when failed", () => {

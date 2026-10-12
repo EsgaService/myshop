@@ -239,7 +239,23 @@ export async function publishBook(_prev: BookActionState, formData: FormData): P
   if (!book) return { status: "error", message: NOT_FOUND };
 
   const access = await getSellerAccess(seller.id, seller.is_platform);
-  const decision = decidePublish({ status: book.status, priceCents: book.price_cents, canPublish: access.canPublish });
+  const admin = createAdminClient();
+  const { count: readyPdfCount, error: countError } = await admin
+    .from("book_uploads")
+    .select("id", { count: "exact", head: true })
+    .eq("seller_id", seller.id)
+    .eq("book_id", book.id)
+    .eq("status", "ready")
+    .is("removed_at", null);
+  if (countError) return { status: "error", message: GENERIC };
+
+  const decision = decidePublish({
+    status: book.status,
+    priceCents: book.price_cents,
+    canPublish: access.canPublish,
+    readyPdfCount: readyPdfCount ?? 0,
+    isLegacy: book.legacy_store_id !== null,
+  });
   if (!decision.ok) {
     return {
       status: "error",
@@ -249,7 +265,7 @@ export async function publishBook(_prev: BookActionState, formData: FormData): P
   }
   if (book.status === "published") return { status: "saved" };
 
-  const { error } = await createAdminClient()
+  const { error } = await admin
     .from("books")
     .update({ status: "published", published_at: new Date().toISOString() })
     .eq("id", book.id)

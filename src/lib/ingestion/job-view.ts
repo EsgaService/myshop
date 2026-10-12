@@ -36,7 +36,7 @@ export function describeUpload(input: {
     case "processing":
       return { label: "Procesando con IA", tone: "primary", polling: true, canRetry: false, canRemove: false };
     case "succeeded":
-      return { label: "Listo", tone: "success", polling: false, canRetry: false, canRemove: false };
+      return { label: "Listo", tone: "success", polling: false, canRetry: false, canRemove: true };
     case "failed":
       return { label: "Falló", tone: "danger", polling: false, canRetry: true, canRemove: true };
   }
