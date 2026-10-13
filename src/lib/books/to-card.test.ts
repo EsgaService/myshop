@@ -40,4 +40,9 @@ describe("toBookCard", () => {
       textColor: "#000000",
     });
   });
+
+  it("resolves the cover image URL and leaves it null when absent", () => {
+    expect(toBookCard(book).coverUrl).toBeNull();
+    expect(toBookCard({ ...book, cover_url: "https://cdn.example.com/c.webp" }).coverUrl).toBe("https://cdn.example.com/c.webp");
+  });
 });

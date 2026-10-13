@@ -121,7 +121,7 @@ function Photo({ path, alt, className = "" }: { path: string | null; alt: string
   const [failed, setFailed] = useState(false);
   const src = photoUrl(path);
   if (!src || failed) {
-    return <div aria-hidden className={`flex items-center justify-center bg-black/5 text-4xl ${className}`}>🍹</div>;
+    return <div aria-hidden className={`bg-gradient-to-br from-black/5 to-black/10 ${className}`} />;
   }
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`object-cover ${className}`} />;

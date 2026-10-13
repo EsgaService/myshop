@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { BookHero } from "@/components/books/BookHero";
 import { BookUnavailable } from "@/components/books/BookUnavailable";
+import { resolveCoverUrl } from "@/lib/books/cover-url";
+import { loadTeaserPhotoUrl } from "@/lib/books/load-teaser-photo";
 import { Notice } from "@/components/ui/Notice";
 import { avisoMessage } from "@/lib/auth/screens";
 import { loadBookContext } from "@/lib/access/load-book-context";
@@ -21,23 +24,19 @@ export default async function BookLandingPage({
 
   const { book, role, input } = ctx;
   const sample = book.teaser.sample;
+  const samplePhoto = await loadTeaserPhotoUrl(book.id, sample?.title);
   const notice = role ? avisoMessage(aviso, role) : null;
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       {notice && <Notice>{notice}</Notice>}
-      <section
-        className="overflow-hidden rounded-3xl p-8 text-center text-white shadow-lg"
-        style={{
-          background: book.cover_url ? `linear-gradient(#0007,#0007), url(${book.cover_url}) center/cover` : "var(--brand-primary)",
-        }}
-      >
-        <h1 className="text-3xl font-bold sm:text-4xl">{book.title}</h1>
-        {book.tagline && <p className="mt-2 text-lg opacity-90">{book.tagline}</p>}
-        <p className="mt-3 text-sm opacity-80">
-          Por <Link href={`/${book.seller.slug}`} className="underline underline-offset-2">{book.seller.store_name}</Link>
-        </p>
-      </section>
+      <BookHero
+        title={book.title}
+        tagline={book.tagline}
+        sellerSlug={book.seller.slug}
+        sellerName={book.seller.store_name}
+        coverUrl={resolveCoverUrl(book.cover_url)}
+      />
 
       <section className="mt-8 space-y-3 text-lg leading-relaxed">
         {book.description && <p>{book.description}</p>}
@@ -50,6 +49,10 @@ export default async function BookLandingPage({
         <section className="mt-8 rounded-2xl border border-black/10 bg-white/60 p-6">
           <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--brand-primary)" }}>Receta de muestra</p>
           <h2 className="mt-1 text-2xl font-bold">{sample.title}</h2>
+          {samplePhoto && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={samplePhoto} alt={sample.title} loading="lazy" decoding="async" className="mt-4 aspect-[4/3] w-full rounded-xl object-cover" />
+          )}
           <h3 className="mt-4 font-semibold">Ingredientes</h3>
           <ul className="mt-1 list-disc pl-5">
             {sample.ingredients.map((i, k) => <li key={k}>{i}</li>)}

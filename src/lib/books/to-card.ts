@@ -1,5 +1,6 @@
 import type { BookCardData } from "@/components/ui/BookCard";
 import type { BookWithSeller } from "@/lib/data/types";
+import { resolveCoverUrl } from "./cover-url";
 import { bookPaths } from "./share-links";
 
 /** Maps a book with its seller to the data a marketplace card needs. */
@@ -14,5 +15,6 @@ export function toBookCard(book: BookWithSeller): BookCardData {
     primaryColor: book.primary_color,
     backgroundColor: book.background_color,
     textColor: book.text_color,
+    coverUrl: resolveCoverUrl(book.cover_url),
   };
 }
