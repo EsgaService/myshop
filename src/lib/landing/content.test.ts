@@ -6,8 +6,9 @@ const allCopy = JSON.stringify(LANDING).toLowerCase();
 
 describe("landing CTAs", () => {
   it("points the seller CTA to seller auth and the login CTA to buyer auth", () => {
-    expect(LANDING.ctas.sell).toEqual({ label: "Quiero vender", href: "/vendedor/ingresar" });
+    expect(LANDING.ctas.sell).toEqual({ label: "Quiero vender", href: "/vendedor/ingresar?modo=crear" });
     expect(LANDING.ctas.login).toEqual({ label: "Iniciar sesión", href: "/ingresar" });
+    expect(LANDING.ctas.signup).toEqual({ label: "Crear cuenta", href: "/ingresar?modo=crear" });
   });
 });
 

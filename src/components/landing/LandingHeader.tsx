@@ -14,9 +14,16 @@ async function AuthSlot() {
   }
   const cta = landingHomeFor(role);
   return (
-    <ButtonLink href={cta.href} variant="outline" className="h-10 px-4">
-      {cta.label}
-    </ButtonLink>
+    <div className="flex items-center gap-2">
+      {!role && (
+        <ButtonLink href={LANDING.ctas.signup.href} className="h-10 px-4">
+          {LANDING.ctas.signup.label}
+        </ButtonLink>
+      )}
+      <ButtonLink href={cta.href} variant="outline" className="h-10 px-4">
+        {cta.label}
+      </ButtonLink>
+    </div>
   );
 }
 
@@ -35,9 +42,14 @@ export function LandingHeader() {
         </nav>
         <Suspense
           fallback={
-            <ButtonLink href={fallback.href} variant="outline" className="h-10 px-4">
-              {fallback.label}
-            </ButtonLink>
+            <div className="flex items-center gap-2">
+              <ButtonLink href={LANDING.ctas.signup.href} className="h-10 px-4">
+                {LANDING.ctas.signup.label}
+              </ButtonLink>
+              <ButtonLink href={fallback.href} variant="outline" className="h-10 px-4">
+                {fallback.label}
+              </ButtonLink>
+            </div>
           }
         >
           <AuthSlot />

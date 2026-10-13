@@ -25,6 +25,9 @@ export function Hero() {
             <ButtonLink href={ctas.sell.href} size="lg">
               {ctas.sell.label} <ArrowRight size={18} weight="bold" aria-hidden />
             </ButtonLink>
+            <ButtonLink href={ctas.signup.href} variant="outline" size="lg">
+              {ctas.signup.label}
+            </ButtonLink>
             <ButtonLink href={ctas.login.href} variant="outline" size="lg">
               {ctas.login.label}
             </ButtonLink>

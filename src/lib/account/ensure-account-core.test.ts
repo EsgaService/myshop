@@ -8,6 +8,7 @@ function makeDeps(overrides: Partial<AccountDeps> & { role?: AccountRole | null;
   const deps = {
     getProfileRole: vi.fn(async () => stored),
     hasLegacyPurchases: vi.fn(async () => legacy),
+    now: () => new Date("2026-10-13T12:00:00.000Z"),
     insertProfile: vi.fn(async (p: { role: AccountRole }) => {
       stored = stored ?? p.role; // on conflict do nothing
     }),
@@ -19,14 +20,14 @@ function makeDeps(overrides: Partial<AccountDeps> & { role?: AccountRole | null;
   return deps;
 }
 
-const user = { userId: "u1", displayName: "Ana Pérez", avatarUrl: "http://a/x.png", email: "ana@example.com" };
+const user = { userId: "u1", displayName: "Ana Pérez", avatarUrl: "http://a/x.png", email: "ana@example.com", consent: "1" };
 
 describe("ensureAccountCore (R1)", () => {
   it("creates a seller profile, store and mirrors the role for a new user from the seller screen", async () => {
     const deps = makeDeps();
     const result = await ensureAccountCore(deps, { ...user, intent: "seller" });
     expect(result).toEqual({ role: "seller", isNew: true, mismatch: false });
-    expect(deps.insertProfile).toHaveBeenCalledWith({ id: "u1", role: "seller", display_name: "Ana Pérez", avatar_url: "http://a/x.png" });
+    expect(deps.insertProfile).toHaveBeenCalledWith({ id: "u1", role: "seller", display_name: "Ana Pérez", avatar_url: "http://a/x.png", terms_accepted_at: "2026-10-13T12:00:00.000Z" });
     expect(deps.insertSeller).toHaveBeenCalledWith({ userId: "u1", storeName: "Ana Pérez", avatarUrl: "http://a/x.png" });
     expect(deps.mirrorRole).toHaveBeenCalledWith("u1", "seller");
   });
@@ -34,7 +35,7 @@ describe("ensureAccountCore (R1)", () => {
   it("creates only a buyer profile for a new user from the buyer screen", async () => {
     const deps = makeDeps();
     const result = await ensureAccountCore(deps, { ...user, intent: "buyer" });
-    expect(result.role).toBe("buyer");
+    expect(result).toMatchObject({ role: "buyer" });
     expect(deps.insertSeller).not.toHaveBeenCalled();
     expect(deps.mirrorRole).toHaveBeenCalledWith("u1", "buyer");
   });
@@ -42,7 +43,7 @@ describe("ensureAccountCore (R1)", () => {
   it("defaults forged intents to buyer", async () => {
     const deps = makeDeps();
     const result = await ensureAccountCore(deps, { ...user, intent: "admin" });
-    expect(result.role).toBe("buyer");
+    expect(result).toMatchObject({ role: "buyer" });
     expect(deps.insertSeller).not.toHaveBeenCalled();
   });
 
@@ -103,5 +104,35 @@ describe("ensureAccountCore (R1)", () => {
     await ensureAccountCore(long, { ...user, displayName: "x".repeat(200), intent: "seller" });
     const call = (long.insertSeller as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [{ storeName: string }];
     expect(call[0].storeName.length).toBe(80);
+  });
+});
+
+describe("ensureAccountCore consent rule", () => {
+  it("does not create anything without consent for a new user", async () => {
+    const deps = makeDeps();
+    const result = await ensureAccountCore(deps, { ...user, consent: null, intent: "seller" });
+    expect(result).toEqual({ requiresSignup: true });
+    expect(deps.insertProfile).not.toHaveBeenCalled();
+    expect(deps.insertSeller).not.toHaveBeenCalled();
+    expect(deps.mirrorRole).not.toHaveBeenCalled();
+  });
+
+  it("rejects consent values other than 1", async () => {
+    const deps = makeDeps();
+    expect(await ensureAccountCore(deps, { ...user, consent: "true", intent: "buyer" })).toEqual({ requiresSignup: true });
+    expect(deps.insertProfile).not.toHaveBeenCalled();
+  });
+
+  it("ignores missing consent for an existing account (plain sign-in)", async () => {
+    const deps = makeDeps({ role: "buyer" });
+    const result = await ensureAccountCore(deps, { ...user, consent: undefined, intent: "buyer" });
+    expect(result).toEqual({ role: "buyer", isNew: false, mismatch: false });
+    expect(deps.insertProfile).not.toHaveBeenCalled();
+  });
+
+  it("stamps terms_accepted_at when creating with consent", async () => {
+    const deps = makeDeps();
+    await ensureAccountCore(deps, { ...user, intent: "buyer" });
+    expect(deps.insertProfile).toHaveBeenCalledWith(expect.objectContaining({ terms_accepted_at: "2026-10-13T12:00:00.000Z" }));
   });
 });

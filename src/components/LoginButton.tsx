@@ -16,11 +16,14 @@ export function LoginButton({
   as,
   label = "Continuar con Google",
   className = "",
+  requireConsent = false,
 }: {
   next?: string;
   as?: Intent;
   label?: string;
   className?: string;
+  /** Sign-up mode: shows the terms checkbox and tells the server consent was given. */
+  requireConsent?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +32,7 @@ export function LoginButton({
   const checkboxId = useId();
 
   async function login() {
-    if (!canStartLogin(accepted)) {
+    if (requireConsent && !canStartLogin(accepted)) {
       setConsentError(true);
       return;
     }
@@ -39,6 +42,7 @@ export function LoginButton({
     const supabase = createClient();
     const params = new URLSearchParams({ next });
     if (as) params.set("as", as);
+    if (requireConsent) params.set(CONSENT.param.name, CONSENT.param.value);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback?${params.toString()}` },
@@ -51,6 +55,7 @@ export function LoginButton({
 
   return (
     <div>
+      {requireConsent && (
       <div className="mb-4 flex items-start gap-2 text-left text-sm text-fg-muted">
         <input
           id={checkboxId}
@@ -74,11 +79,12 @@ export function LoginButton({
           </Link>
         </label>
       </div>
+      )}
       <button
         type="button"
         onClick={login}
-        disabled={loading || !accepted}
-        aria-disabled={loading || !accepted}
+        disabled={loading || (requireConsent && !accepted)}
+        aria-disabled={loading || (requireConsent && !accepted)}
         className={`inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-fg shadow-soft transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       >
         {loading ? "Redirigiendo…" : label}
