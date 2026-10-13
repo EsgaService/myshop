@@ -1,6 +1,7 @@
 import "server-only";
 import { getAiBookProvider } from "@/lib/ai";
-import { jobTimeoutMs } from "./deadline";
+import { runImageSweep } from "@/lib/images/run-sweep";
+import { jobTimeoutMs, ROUTE_DEADLINE_MS } from "./deadline";
 import { drainQueue, type DrainSummary } from "./drain";
 import { processJob } from "./process-job";
 import { claimNextJob, createIngestionRepo } from "./repo";
@@ -24,7 +25,7 @@ export async function runIngestionWorker(
 
   const startedAt = Date.now();
 
-  return drainQueue(
+  const summary = await drainQueue(
     {
       claim: claimNextJob,
       // Each job is aborted before the route maxDuration so a late call never outlives the request.
@@ -40,4 +41,9 @@ export async function runIngestionWorker(
     },
     { maxJobs: opts.maxJobs ?? DEFAULT_MAX_JOBS, budgetMs: opts.budgetMs ?? DEFAULT_BUDGET_MS },
   );
+
+  // Best-effort image extraction (also backfills older uploads). It never throws and is skipped when
+  // less than a minute of the request budget is left, so it cannot affect ingestion.
+  await runImageSweep(ROUTE_DEADLINE_MS - (Date.now() - startedAt));
+  return summary;
 }

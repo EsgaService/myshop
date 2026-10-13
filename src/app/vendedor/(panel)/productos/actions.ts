@@ -21,6 +21,8 @@ import {
   holdsUploadSlot,
   UPLOAD_TOKEN_TTL_MS,
 } from "@/lib/books/upload-limit";
+import { cleanupUploadImages, resetCoverIfFromUpload } from "@/lib/images/cleanup";
+import { createCleanupDeps } from "@/lib/images/image-store";
 import { runIngestionWorker } from "@/lib/ingestion/worker";
 import { createPdfUploadUrl, getPdfSize, removePdf } from "@/lib/ingestion/storage";
 import { getSellerAccess } from "@/lib/seller/access";
@@ -276,6 +278,9 @@ export async function removeUpload(uploadId: string): Promise<SimpleResult> {
 
   // After the commit: a leftover object is only a leak, never a broken product.
   await removePdf(upload.storage_path).catch((e) => console.error("could not remove PDF object", e));
+  await cleanupUploadImages({ id: upload.id, sellerId: seller.id, bookId: upload.book_id }, createCleanupDeps()).catch((e) =>
+    console.error("could not clean up PDF images", e),
+  );
   revalidateProducts();
   return { ok: true };
 }
@@ -340,6 +345,10 @@ export async function moveUpload(uploadId: string, targetBookId: string): Promis
     return { ok: false, message: moveUploadErrorMessage(failure) };
   }
 
+  // The source product must not keep a cover that came from the moved PDF (its images stay keyed by upload).
+  await resetCoverIfFromUpload({ id: upload.id, sellerId: seller.id, bookId: source.id }, createCleanupDeps()).catch((e) =>
+    console.error("could not reset cover after move", e),
+  );
   revalidateProducts();
   return { ok: true, sourceEmpty: (data as { source_empty?: boolean } | null)?.source_empty === true };
 }
