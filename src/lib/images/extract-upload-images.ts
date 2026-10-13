@@ -1,5 +1,6 @@
 import { assignPhotos } from "./assign-photos";
 import { chooseCover } from "./choose-cover";
+import { decideExtractionWrite } from "./decide-extraction-write";
 import { filterImages } from "./filter-images";
 import { matchRecipesToPages } from "./match-recipes";
 import type { CandidateRow, ImageEncoder, ImageStore, PdfImageExtractor, UploadToProcess } from "./ports";
@@ -79,7 +80,14 @@ export async function extractUploadImages(upload: UploadToProcess, deps: Extract
       storedPathById.set(placementId(placement), `${base}.webp`);
     }
 
+    // The seller may have removed or moved the PDF while it was processed: re-read before every write phase.
+    const canWrite = async () =>
+      decideExtractionWrite({ startedBookId: upload.bookId, current: await store.getUploadState(upload.id) }) === "write";
+    if (!(await canWrite())) return { status: "done", stored: 0 };
+
     await store.replaceCandidates(upload, rows);
+
+    if (!(await canWrite())) return { status: "done", stored: 0 };
 
     const autoRecipes = new Set(recipes.filter((r) => r.photoSource === "auto").map((r) => r.id));
     const photoByRecipe = new Map(assignments.map((a) => [a.recipeId, storedPathById.get(placementId(a.placement))]));
@@ -94,7 +102,7 @@ export async function extractUploadImages(upload: UploadToProcess, deps: Extract
     if (updates.length > 0) await store.setRecipePhotos(updates);
 
     const coverPath = coverPick ? storedPathById.get(placementId(coverPick)) : undefined;
-    if (coverPath) await store.setCover(upload.bookId, coverPath);
+    if (coverPath) await store.setCover(upload.bookId, coverPath, upload.id);
 
     await store.markDone(upload.id, rows.length > 0);
     return { status: "done", stored: rows.length };

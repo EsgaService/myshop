@@ -39,6 +39,8 @@ type Fixture = {
   decodeError?: Error;
   recipes?: UploadRecipe[];
   cover?: { coverUrl: string | null; coverSource: CoverSource };
+  /** What the DB says about the upload right before writing (default: active, same product). */
+  uploadState?: { bookId: string | null; removedAt: string | null } | null;
 };
 
 const raw: RawImage = { width: 4, height: 4, channels: 3, data: new Uint8Array(48) };
@@ -89,6 +91,9 @@ function makeWorld(fx: Fixture) {
     },
     async putImage(path, bytes) {
       objects.set(path, bytes);
+    },
+    async getUploadState() {
+      return fx.uploadState === undefined ? { bookId: UPLOAD.bookId, removedAt: null } : fx.uploadState;
     },
     async replaceCandidates(_upload, rows) {
       candidates = rows;
@@ -258,6 +263,7 @@ describe("extractUploadImages never fails the book (R1.2)", () => {
         },
         listUploadRecipes: async () => [],
         getBookCover: async () => ({ coverUrl: null, coverSource: "auto" }),
+        getUploadState: async () => ({ bookId: UPLOAD.bookId, removedAt: null }),
         putImage: async () => {},
         replaceCandidates: async () => {},
         setRecipePhotos: async () => {},
@@ -272,6 +278,24 @@ describe("extractUploadImages never fails the book (R1.2)", () => {
     expect(result.status).toBe("failed");
     expect(calls).toEqual([]); // aborted before any download
     expect(failedWith).toContain("abort");
+  });
+});
+
+describe("extractUploadImages vs removal or move while it runs", () => {
+  it.each([
+    ["removed", { bookId: "book-1", removedAt: "2026-10-12T00:00:00Z" }],
+    ["moved to another product", { bookId: "book-2", removedAt: null }],
+    ["deleted", null],
+  ])("writes nothing when the upload was %s", async (_label, uploadState) => {
+    const w = makeWorld({ ...twoRecipePdf(), uploadState });
+    const result = await w.run();
+    const s = w.state();
+    expect(result).toEqual({ status: "done", stored: 0 });
+    expect(s.candidates).toEqual([]);
+    expect(s.recipePhotos).toEqual([]);
+    expect(s.cover).toBeNull();
+    expect(s.done).toBeNull();
+    expect(s.failed).toBeNull();
   });
 });
 

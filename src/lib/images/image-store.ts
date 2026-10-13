@@ -38,6 +38,11 @@ export function createImageStore(): ImageStore {
       return { coverUrl: (data?.cover_url as string | null) ?? null, coverSource: ((data?.cover_source as CoverSource | undefined) ?? "auto") };
     },
 
+    async getUploadState(uploadId) {
+      const { data } = check("read upload", await admin.from("book_uploads").select("book_id,removed_at").eq("id", uploadId).maybeSingle());
+      return data ? { bookId: (data.book_id as string | null) ?? null, removedAt: (data.removed_at as string | null) ?? null } : null;
+    },
+
     async putImage(path, bytes) {
       check(
         "store image",
@@ -92,7 +97,13 @@ export function createImageStore(): ImageStore {
       }
     },
 
-    async setCover(bookId, path) {
+    async setCover(bookId, path, uploadId) {
+      // The cover target must still own the (active) upload the image came from.
+      const { data: owner } = check(
+        "check cover owner",
+        await admin.from("book_uploads").select("id").eq("id", uploadId).eq("book_id", bookId).is("removed_at", null).maybeSingle(),
+      );
+      if (!owner) return;
       check(
         "set cover",
         await admin.from("books").update({ cover_url: path }).eq("id", bookId).eq("cover_source", "auto").is("cover_url", null),

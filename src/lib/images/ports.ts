@@ -47,14 +47,16 @@ export interface ImageStore {
   /** Recipes created from this upload, in PDF order. */
   listUploadRecipes(uploadId: string): Promise<UploadRecipe[]>;
   getBookCover(bookId: string): Promise<{ coverUrl: string | null; coverSource: CoverSource }>;
+  /** Fresh read of the upload (null when gone), used to abort writes after a removal or a move. */
+  getUploadState(uploadId: string): Promise<{ bookId: string | null; removedAt: string | null } | null>;
   /** Uploads (upserts) a WebP object into the recipe-photos bucket. */
   putImage(path: string, bytes: Uint8Array): Promise<void>;
   /** Upserts the rows by (upload, ordinal) and deletes the upload's rows whose ordinal is not listed. */
   replaceCandidates(upload: UploadToProcess, rows: CandidateRow[]): Promise<void>;
   /** Applied only to recipes whose photo_source is still 'auto'. A missing photoPath leaves the photo alone. */
   setRecipePhotos(updates: { recipeId: string; sourcePage: number; photoPath?: string }[]): Promise<void>;
-  /** Applied only when the book still has no cover and cover_source is 'auto'. */
-  setCover(bookId: string, path: string): Promise<void>;
+  /** Applied only when the book still has no cover, cover_source is 'auto' and the upload is still active in that book. */
+  setCover(bookId: string, path: string, uploadId: string): Promise<void>;
   markDone(uploadId: string, reviewPending: boolean): Promise<void>;
   markFailed(uploadId: string, message: string): Promise<void>;
 }
