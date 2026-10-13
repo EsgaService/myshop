@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { sellerNav } from "./nav";
 
 describe("sellerNav (R4, R10)", () => {
-  it("lists dashboard, products, profile and subscription in order", () => {
+  it("lists dashboard, products, profile, subscription and payout account in order", () => {
     expect(sellerNav()).toEqual([
       { label: "Panel", href: "/vendedor" },
       { label: "Productos", href: "/vendedor/productos" },
       { label: "Perfil", href: "/vendedor/perfil" },
       { label: "Suscripción", href: "/vendedor/suscripcion" },
+      { label: "Cuenta para pagos", href: "/vendedor/pagos" },
     ]);
   });
 

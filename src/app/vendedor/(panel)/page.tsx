@@ -7,6 +7,7 @@ import { avisoMessage } from "@/lib/auth/screens";
 import { MAX_UPLOADS_PER_SELLER } from "@/lib/books/upload-limit";
 import { listMyBooks, listMyUploads } from "@/lib/data/queries";
 import { getSellerSubscription } from "@/lib/seller/access";
+import { hasPayoutAccount } from "@/lib/seller/payout-store";
 import { storePath } from "@/lib/books/share-links";
 
 export const metadata = { title: "Panel del vendedor" };
@@ -15,10 +16,11 @@ const dateFormat = new Intl.DateTimeFormat("es-CO", { dateStyle: "long", timeZon
 
 export default async function SellerDashboardPage({ searchParams }: { searchParams: Promise<{ aviso?: string }> }) {
   const [{ seller, profile }, { aviso }] = await Promise.all([requireSeller(), searchParams]);
-  const [books, uploads, subscription] = await Promise.all([
+  const [books, uploads, subscription, hasPayout] = await Promise.all([
     listMyBooks(seller.id),
     listMyUploads(seller.id),
     seller.is_platform ? null : getSellerSubscription(seller.id),
+    seller.is_platform ? true : hasPayoutAccount(seller.id),
   ]);
   const notice = avisoMessage(aviso, profile.role);
   const published = books.filter((b) => b.status === "published").length;
@@ -68,6 +70,21 @@ export default async function SellerDashboardPage({ searchParams }: { searchPara
           </ButtonLink>
         )}
       </Card>
+
+      {!hasPayout && (
+        <Card className="mt-6 flex flex-wrap items-center justify-between gap-4 p-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-xl font-semibold">Cuenta para pagos</h2>
+              <Badge tone="warning">Pendiente</Badge>
+            </div>
+            <p className="mt-1 text-sm text-fg-muted">
+              Cuéntanos dónde quieres recibir tus ganancias. La plataforma cobra con Wompi y te transfiere lo que vendas.
+            </p>
+          </div>
+          <ButtonLink href="/vendedor/pagos">Agregar cuenta</ButtonLink>
+        </Card>
+      )}
 
       <div className="mt-6 flex flex-wrap gap-3">
         <ButtonLink href="/vendedor/productos">Ir a mis productos</ButtonLink>

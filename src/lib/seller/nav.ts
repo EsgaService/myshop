@@ -7,5 +7,6 @@ export function sellerNav(): SellerNavItem[] {
     { label: "Productos", href: "/vendedor/productos" },
     { label: "Perfil", href: "/vendedor/perfil" },
     { label: "Suscripción", href: "/vendedor/suscripcion" },
+    { label: "Cuenta para pagos", href: "/vendedor/pagos" },
   ];
 }
