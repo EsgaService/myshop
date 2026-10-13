@@ -16,11 +16,6 @@ export function LandingFooter() {
         </nav>
         <p className="font-mono text-xs">&copy; {new Date().getFullYear()} Recetarios</p>
       </div>
-      <p className="mx-auto max-w-6xl px-4 pb-8 text-center text-xs text-fg-muted sm:px-6">
-        <Link href={LANDING.footer.owner.href} className="underline-offset-4 transition-colors hover:text-fg hover:underline">
-          {LANDING.footer.owner.text}
-        </Link>
-      </p>
     </footer>
   );
 }

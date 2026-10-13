@@ -26,7 +26,8 @@ export const PRIVACY: LegalDocument = {
     {
       heading: "1. Responsable del tratamiento",
       body: [
-        `MyShop, disponible en myshop.lat, es administrado por ${LEGAL_OWNER.name}, ${LEGAL_OWNER.personType.toLowerCase()}, identificado con cédula de ciudadanía No. ${LEGAL_OWNER.documentNumber}, quien es el responsable del tratamiento de los datos personales que se recopilan a través de la plataforma.`,
+        "MyShop (myshop.lat), administrado por su titular, es el responsable del tratamiento de los datos personales que se recopilan a través de la plataforma.",
+        "Consulta la información legal completa del responsable en los Términos y condiciones (/terminos).",
         `Para cualquier consulta, solicitud o reclamo sobre tus datos puedes escribirnos a ${EMAIL}.`,
       ],
     },

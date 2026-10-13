@@ -26,16 +26,22 @@ describe("legal content", () => {
     });
   });
 
-  it("terms and privacy identify the owner and open with the legal information", () => {
-    for (const doc of [PRIVACY, TERMS]) {
-      const text = flatten(doc);
-      expect(text).toContain("Víctor Ortiz");
-      expect(text).toContain("1090525663");
-      expect(text).toContain("persona natural");
-    }
+  it("only the terms identify the owner; privacy stays generic and points to the terms", () => {
+    const terms = flatten(TERMS);
+    expect(terms).toContain("Víctor Ortiz");
+    expect(terms).toContain("1090525663");
+    expect(terms).toContain("persona natural");
     expect(TERMS.sections[0].heading).toBe("1. Información legal del responsable");
     expect(TERMS.sections[0].body.join(" ")).toContain("myshop.lat");
-    expect(PRIVACY.sections[0].body.join(" ")).toContain("Víctor Ortiz");
+
+    const privacy = flatten(PRIVACY);
+    expect(privacy).not.toContain("1090525663");
+    expect(privacy).not.toContain("Víctor Ortiz");
+    const first = PRIVACY.sections[0].body.join(" ");
+    expect(first).toContain("myshop.lat");
+    expect(first).toContain(LEGAL_CONTACT_EMAIL);
+    expect(first).toContain("Términos y condiciones");
+    expect(first).toContain("/terminos");
   });
 
   it("privacy policy cites the Colombian data protection framework", () => {
