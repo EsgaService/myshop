@@ -31,15 +31,18 @@ type FileLine = { name: string; state: "waiting" | "uploading" | "done" | "error
  */
 export function ProductUploader({
   products,
+  initialTarget,
   slotsHeld,
   canUpload,
 }: {
   products: UploaderProduct[];
+  /** Product preselected in the target select (already validated by the page). */
+  initialTarget?: string;
   slotsHeld: number;
   canUpload: boolean;
 }) {
   const router = useRouter();
-  const [target, setTarget] = useState<string>(products[0]?.id ?? NEW_PRODUCT);
+  const [target, setTarget] = useState<string>(initialTarget ?? products[0]?.id ?? NEW_PRODUCT);
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [priceKey, setPriceKey] = useState(0);

@@ -8,12 +8,18 @@ import { listMyBooks, listMyMoveTargets, listMyUploads } from "@/lib/data/querie
 import { getSellerAccess } from "@/lib/seller/access";
 import { groupUploadsByProduct } from "@/lib/seller/group-uploads";
 import { listMovablePdfs } from "@/lib/seller/movable-pdfs";
+import { pickInitialTarget } from "@/lib/seller/pick-initial-target";
 
 export const metadata = { title: "Productos" };
 // Server actions on this page enqueue and run the ingestion worker via after().
 export const maxDuration = 300;
 
-export default async function ProductsPage() {
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ producto?: string | string[] }>;
+}) {
+  const { producto } = await searchParams;
   const { seller } = await requireSeller();
   const [books, uploads, access, moveTargets] = await Promise.all([
     listMyBooks(seller.id),
@@ -21,6 +27,8 @@ export default async function ProductsPage() {
     getSellerAccess(seller.id, seller.is_platform),
     listMyMoveTargets(seller.id),
   ]);
+  const uploaderProducts = books.filter((b) => b.status !== "archived").map((b) => ({ id: b.id, title: b.title }));
+  const initialTarget = pickInitialTarget(producto, uploaderProducts);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
   // Each PDF is shown under its product. Legacy uploads without a product still need a place.
   const { groups, orphans } = groupUploadsByProduct(books, uploads);
@@ -41,11 +49,15 @@ export default async function ProductsPage() {
         </Notice>
       )}
 
-      <ProductUploader
-        products={books.filter((b) => b.status !== "archived").map((b) => ({ id: b.id, title: b.title }))}
-        slotsHeld={uploads.length}
-        canUpload={access.canSell}
-      />
+      <div id="subir" className="scroll-mt-6">
+        <ProductUploader
+          key={initialTarget ?? "default"}
+          products={uploaderProducts}
+          initialTarget={initialTarget}
+          slotsHeld={uploads.length}
+          canUpload={access.canSell}
+        />
+      </div>
 
       {orphansInProgress.length > 0 && (
         <section aria-labelledby="in-progress" className="space-y-3">

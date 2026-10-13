@@ -54,6 +54,18 @@ export function ProductRow({
           </p>
         )}
         <AddExistingPdfsControl target={{ id: book.id, title: book.title }} pdfs={movablePdfs} />
+        {book.status !== "archived" && (
+          <div className="space-y-1">
+            <Link href={`/vendedor/productos?producto=${book.id}#subir`} className="text-sm font-medium text-primary hover:underline">
+              Subir más PDF
+            </Link>
+            {published && (
+              <p className="text-xs text-fg-muted">
+                Las recetas de los PDF nuevos aparecen para tus compradores apenas terminen de procesarse.
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <PricePublishControl bookId={book.id} priceCents={book.price_cents} published={published} />
