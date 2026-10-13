@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { detectImageType } from "./detect-image-type";
-import { decodeCustomImage } from "./decode-custom-image";
+import { decodeCustomImage, MAX_DECODED_SIDE } from "./decode-custom-image";
 import { sharpEncoder } from "./sharp-encoder";
 
 async function png(width: number, height: number, channels: 3 | 4 = 3): Promise<Uint8Array> {
@@ -11,16 +11,33 @@ async function png(width: number, height: number, channels: 3 | 4 = 3): Promise<
 }
 
 describe("decodeCustomImage + sharpEncoder", () => {
-  it("decodes to RGB raw pixels and re-encodes to WebP capped at 1600px with a 480px thumb", async () => {
+  it("decodes to RGB raw pixels already capped at 1600px and re-encodes to WebP with a 480px thumb", async () => {
     const raw = await decodeCustomImage(await png(3200, 2000));
     expect(raw.channels).toBe(3);
-    expect(raw.width).toBe(3200);
+    expect(raw.width).toBe(1600);
+    expect(raw.height).toBe(1000);
     const out = await sharpEncoder.toWebp(raw);
     expect(detectImageType(out.full)).toBe("webp");
     expect(detectImageType(out.thumb)).toBe("webp");
     expect(out.width).toBe(1600);
     expect(out.height).toBe(1000);
     expect((await sharp(out.thumb).metadata()).width).toBe(480);
+  });
+
+  it("never produces a raw buffer above the cap, however large the source is", async () => {
+    const raw = await decodeCustomImage(await png(6000, 6000));
+    expect(Math.max(raw.width, raw.height)).toBeLessThanOrEqual(MAX_DECODED_SIDE);
+    expect(raw.data.byteLength).toBeLessThanOrEqual(MAX_DECODED_SIDE * MAX_DECODED_SIDE * 4);
+  });
+
+  it("does not enlarge small images", async () => {
+    const raw = await decodeCustomImage(await png(300, 200));
+    expect([raw.width, raw.height]).toEqual([300, 200]);
+  });
+
+  it("rejects sources above the input pixel limit", async () => {
+    const huge = await sharp({ create: { width: 7000, height: 6000, channels: 3, background: "#000" } }).png().toBuffer();
+    await expect(decodeCustomImage(new Uint8Array(huge))).rejects.toThrow();
   });
 
   it("keeps the alpha channel when the source has one", async () => {

@@ -5,6 +5,8 @@ import type { PageText, Placement } from "./types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- pdf.js ships no usable types for the legacy build */
 
+/** pdf.js refuses to decode images with more pixels than this. */
+const MAX_IMAGE_PIXELS = 40_000_000;
 const OBJECT_TIMEOUT_MS = 5_000;
 const LINE_Y_TOLERANCE = 3;
 const GRAYSCALE_1BPP = 1;
@@ -97,6 +99,7 @@ export const pdfjsExtractor: PdfImageExtractor = {
         await pdfjs.getDocument({
           data: new Uint8Array(pdf),
           isEvalSupported: false,
+          maxImageSize: MAX_IMAGE_PIXELS,
           useSystemFonts: false,
           verbosity: 0,
           wasmUrl: wasmUrl(),

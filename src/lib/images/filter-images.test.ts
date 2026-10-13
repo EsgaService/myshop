@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterImages } from "./filter-images";
+import { filterImages, MAX_SOURCE_PIXELS } from "./filter-images";
 import type { Placement } from "./types";
 
 const PAGE = { width: 600, height: 800 }; // area 480_000
@@ -72,5 +72,14 @@ describe("filterImages (R1.4)", () => {
   it("counts distinct pages, so one image painted 3 times on the same page is kept", () => {
     const sameImage = [30, 31, 32].map((opIndex) => pl({ opIndex, page: 4, key: "repeat" }));
     expect(keptIds(filterImages(sameImage))).toEqual([30, 31, 32]);
+  });
+
+  it("drops images whose declared pixel count exceeds the decode cap, before any decoding", () => {
+    const side = Math.ceil(Math.sqrt(MAX_SOURCE_PIXELS)) + 1;
+    const bomb = pl({ opIndex: 1, pxWidth: side, pxHeight: side });
+    const ok = pl({ opIndex: 2, pxWidth: 4000, pxHeight: 4000 });
+    const r = filterImages([bomb, ok]);
+    expect(keptIds(r)).toEqual([2]);
+    expect(bgIds(r)).toEqual([1]);
   });
 });
