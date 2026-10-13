@@ -22,6 +22,11 @@ export function validateCustomImage(input: {
   return { ok: true, type };
 }
 
+/** True for the error the `book_images` insert trigger raises when the seller is at the quota (race-proof check). */
+export function isQuotaDbError(error: { code?: string; message?: string } | null | undefined): boolean {
+  return error?.code === "P0001" && (error.message ?? "").includes("custom_image_quota");
+}
+
 export function customImageErrorMessage(reason: CustomImageReason): string {
   switch (reason) {
     case "too_large":

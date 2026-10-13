@@ -123,6 +123,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Removing a PDF (and its recipes) from a product buyers already purchased, and letting buyers download the original PDFs, need legal review (Ley 1480 de 2011, consumer protection / digital content). Today removal is allowed on sold products and purchases are untouched.
 - Very large PDFs (over about 100 pages) may exceed model limits; the job fails with a readable error.
 - Photos: the `recipe-photos` bucket is public, so anyone with a direct photo URL can see the photo without paying. The recipe text stays protected.
+- Temp custom-image uploads (private bucket `seller-image-uploads`) are deleted on every confirm path, but an upload that is never confirmed stays there: a periodic TTL cleanup is not built yet.
 - No real payment gateway yet, only the mock.
 
 ## Next steps

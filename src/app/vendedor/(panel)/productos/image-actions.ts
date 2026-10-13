@@ -17,6 +17,7 @@ import {
   customImageErrorMessage,
   CUSTOM_IMAGE_MAX_BYTES,
   CUSTOM_IMAGE_QUOTA,
+  isQuotaDbError,
   validateCustomImage,
 } from "@/lib/images/validate-custom-image";
 import { isUuid } from "@/lib/ids";
@@ -127,6 +128,8 @@ export async function setCover(bookId: string, rawChoice: unknown): Promise<Imag
     .eq("id", book.id)
     .eq("seller_id", seller.id);
   if (error) return { ok: false, message: GENERIC };
+  // A cover that is no longer one of the product's own uploads frees them from the 300 image quota.
+  await dropReplacedCustomImages(seller.id, decision.coverSource === "custom" ? (image?.id ?? null) : null, "book_id", book.id);
   revalidateProducts();
   return { ok: true, coverUrl };
 }
@@ -153,6 +156,12 @@ export async function requestImageUpload(input: { size: number }): Promise<Reque
   const { data, error } = await createAdminClient().storage.from(TEMP_BUCKET).createSignedUploadUrl(path);
   if (error || !data) return { ok: false, message: GENERIC };
   return { ok: true, path, token: data.token };
+}
+
+/** Best-effort removal of a temp upload we are about to refuse; only the seller's own temp objects are touched. */
+async function discardOwnTemp(sellerId: string, tempPath: string): Promise<void> {
+  if (!isOwnTempPath(sellerId, tempPath)) return;
+  await createAdminClient().storage.from(TEMP_BUCKET).remove([tempPath]).catch(() => undefined);
 }
 
 type StoredImage = { row: ImageRow };
@@ -219,7 +228,7 @@ async function storeCustomImage(
   await dropTemp();
   if (insertError || !row) {
     await cleanupObjects();
-    return { ok: false, message: GENERIC };
+    return { ok: false, message: isQuotaDbError(insertError) ? customImageErrorMessage("quota_reached") : GENERIC };
   }
   return { ok: true, stored: { row: row as ImageRow } };
 }
@@ -241,12 +250,25 @@ async function dropReplacedCustomImages(sellerId: string, keepId: string | null,
   await admin.storage.from(PHOTO_BUCKET).remove(old.flatMap((r) => [r.storage_path, r.thumb_path])).catch(() => undefined);
 }
 
+/** Undoes `storeCustomImage` when the image could not be linked: the row frees the quota, objects are best effort. */
+async function discardStoredImage(sellerId: string, row: ImageRow): Promise<void> {
+  const admin = createAdminClient();
+  await admin.from("book_images").delete().eq("id", row.id).eq("seller_id", sellerId);
+  await admin.storage.from(PHOTO_BUCKET).remove([row.storage_path, row.thumb_path]).catch(() => undefined);
+}
+
 /** Step 2 for the cover: validate, re-encode, store and set the uploaded image as the product cover. */
 export async function confirmCoverUpload(bookId: string, tempPath: string): Promise<ImageActionResult> {
   const { seller } = await requireSeller();
   const book = await getOwnedBook(seller.id, bookId);
-  if (!book) return { ok: false, message: NOT_FOUND };
-  if (!isUuid(bookId) || !isOwnTempPath(seller.id, tempPath)) return { ok: false, message: GENERIC };
+  if (!book) {
+    await discardOwnTemp(seller.id, tempPath);
+    return { ok: false, message: NOT_FOUND };
+  }
+  if (!isUuid(bookId) || !isOwnTempPath(seller.id, tempPath)) {
+    await discardOwnTemp(seller.id, tempPath);
+    return { ok: false, message: GENERIC };
+  }
 
   const stored = await storeCustomImage(seller.id, tempPath, { bookId: book.id });
   if (!stored.ok) return stored;
@@ -258,14 +280,20 @@ export async function confirmCoverUpload(bookId: string, tempPath: string): Prom
     activeUploadIds: [],
     choice: { type: "custom", image: toRef(row) },
   });
-  if (!decision.ok) return { ok: false, message: choiceErrorMessage(decision.reason) };
+  if (!decision.ok) {
+    await discardStoredImage(seller.id, row);
+    return { ok: false, message: choiceErrorMessage(decision.reason) };
+  }
 
   const { error } = await createAdminClient()
     .from("books")
     .update({ cover_url: row.storage_path, cover_source: decision.coverSource })
     .eq("id", book.id)
     .eq("seller_id", seller.id);
-  if (error) return { ok: false, message: GENERIC };
+  if (error) {
+    await discardStoredImage(seller.id, row);
+    return { ok: false, message: GENERIC };
+  }
 
   await dropReplacedCustomImages(seller.id, row.id, "book_id", book.id);
   revalidateProducts();
@@ -386,7 +414,10 @@ export async function setRecipePhoto(recipeId: string, rawChoice: unknown): Prom
 export async function confirmRecipeImageUpload(recipeId: string, tempPath: string): Promise<RecipePhotoResult> {
   const { seller } = await requireSeller();
   const recipe = await loadRecipe(recipeId);
-  if (!recipe || recipe.bookSellerId !== seller.id) return { ok: false, message: choiceErrorMessage("not_owner") };
+  if (!recipe || recipe.bookSellerId !== seller.id) {
+    await discardOwnTemp(seller.id, tempPath);
+    return { ok: false, message: choiceErrorMessage("not_owner") };
+  }
   if (!isOwnTempPath(seller.id, tempPath)) return { ok: false, message: GENERIC };
 
   const stored = await storeCustomImage(seller.id, tempPath, { recipeId: recipe.id });
@@ -399,14 +430,20 @@ export async function confirmRecipeImageUpload(recipeId: string, tempPath: strin
     activeUploadIds: [],
     choice: { type: "custom", image: toRef(row) },
   });
-  if (!decision.ok) return { ok: false, message: choiceErrorMessage(decision.reason) };
+  if (!decision.ok) {
+    await discardStoredImage(seller.id, row);
+    return { ok: false, message: choiceErrorMessage(decision.reason) };
+  }
 
   const { error } = await createAdminClient()
     .from("recipes")
     .update({ photo_path: row.storage_path, photo_source: decision.photoSource })
     .eq("id", recipe.id)
     .eq("book_id", recipe.bookId);
-  if (error) return { ok: false, message: GENERIC };
+  if (error) {
+    await discardStoredImage(seller.id, row);
+    return { ok: false, message: GENERIC };
+  }
 
   await dropReplacedCustomImages(seller.id, row.id, "recipe_id", recipe.id);
   revalidateProducts();

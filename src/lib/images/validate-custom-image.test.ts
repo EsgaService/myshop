@@ -3,6 +3,7 @@ import {
   CUSTOM_IMAGE_MAX_BYTES,
   CUSTOM_IMAGE_QUOTA,
   customImageErrorMessage,
+  isQuotaDbError,
   validateCustomImage,
 } from "./validate-custom-image";
 
@@ -53,5 +54,12 @@ describe("validateCustomImage (R3.5)", () => {
     const messages = (["too_large", "unsupported_type", "quota_reached"] as const).map(customImageErrorMessage);
     expect(new Set(messages).size).toBe(3);
     expect(messages[2]).toContain("300");
+  });
+
+  it("recognizes the database quota error raised by the book_images trigger", () => {
+    expect(isQuotaDbError({ code: "P0001", message: "custom_image_quota" })).toBe(true);
+    expect(isQuotaDbError({ code: "P0001", message: "upload_not_owned" })).toBe(false);
+    expect(isQuotaDbError({ code: "23505", message: "custom_image_quota" })).toBe(false);
+    expect(isQuotaDbError(null)).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ import { ReextractButton } from "./ReextractButton";
 import { RecipePhotoRow } from "./RecipePhotoRow";
 
 export const metadata = { title: "Fotos de las recetas" };
+export const maxDuration = 300;
 
 export default async function RecipePhotosPage({
   params,
