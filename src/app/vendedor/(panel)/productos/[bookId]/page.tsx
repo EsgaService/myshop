@@ -7,8 +7,10 @@ import { Card } from "@/components/ui/Card";
 import { requireSeller } from "@/lib/auth/guards";
 import { bookPaths, storePath } from "@/lib/books/share-links";
 import { listMyBooks } from "@/lib/data/queries";
+import { listActiveUploadIds, listCustomImages, listPdfCandidates } from "@/lib/data/image-queries";
 import { isUuid } from "@/lib/ids";
-import { BookDetailsForm } from "./BookDetailsForm";
+import type { CoverOption } from "./CoverPicker";
+import { PresentationCard } from "./PresentationCard";
 
 export const metadata = { title: "Editar recetario" };
 
@@ -24,6 +26,15 @@ export default async function EditBookPage({ params }: { params: Promise<{ bookI
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
   const published = book.status === "published";
   const paths = bookPaths(seller.slug, book.slug);
+
+  const [pdfCandidates, customImages] = await Promise.all([
+    listActiveUploadIds(seller.id, book.id).then((ids) => listPdfCandidates(seller.id, ids)),
+    listCustomImages(seller.id, { bookId: book.id }),
+  ]);
+  const coverOptions: CoverOption[] = [
+    ...pdfCandidates.map((c) => ({ id: c.id, kind: "pdf" as const, storagePath: c.storagePath, thumbPath: c.thumbPath, label: `p. ${c.page}` })),
+    ...customImages.map((c) => ({ id: c.id, kind: "custom" as const, storagePath: c.storagePath, thumbPath: c.thumbPath, label: "Mía" })),
+  ];
 
   return (
     <div className="space-y-8">
@@ -56,13 +67,13 @@ export default async function EditBookPage({ params }: { params: Promise<{ bookI
         </div>
       </Card>
 
-      <Card className="p-6">
-        <h2 className="mb-5 font-display text-xl font-semibold">Detalles</h2>
-        <BookDetailsForm
-          bookId={book.id}
-          initial={{ title: book.title, tagline: book.tagline ?? "", description: book.description ?? "" }}
-        />
-      </Card>
+      <PresentationCard
+        book={book}
+        sellerSlug={seller.slug}
+        sellerName={seller.store_name}
+        initial={{ title: book.title, tagline: book.tagline ?? "", description: book.description ?? "" }}
+        coverOptions={coverOptions}
+      />
     </div>
   );
 }

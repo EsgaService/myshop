@@ -5,14 +5,34 @@ import { updateBookDetails, type BookActionState } from "@/app/vendedor/(panel)/
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 
-type Values = { title: string; tagline: string; description: string };
+export type BookDetailsValues = { title: string; tagline: string; description: string };
 
-export function BookDetailsForm({ bookId, initial }: { bookId: string; initial: Values }) {
+export function BookDetailsForm({
+  bookId,
+  initial,
+  onChange,
+}: {
+  bookId: string;
+  initial: BookDetailsValues;
+  /** Reports the unsaved values on every edit (drives the live preview). */
+  onChange?: (values: BookDetailsValues) => void;
+}) {
   const [state, action, pending] = useActionState<BookActionState, FormData>(updateBookDetails, { status: "idle" });
   const errors = state.errors ?? {};
 
   return (
-    <form action={action} className="max-w-lg space-y-5">
+    <form
+      action={action}
+      className="max-w-lg space-y-5"
+      onChange={(e) => {
+        const data = new FormData(e.currentTarget);
+        onChange?.({
+          title: String(data.get("title") ?? ""),
+          tagline: String(data.get("tagline") ?? ""),
+          description: String(data.get("description") ?? ""),
+        });
+      }}
+    >
       <input type="hidden" name="bookId" value={bookId} />
       <Field label="Título" htmlFor="title" error={errors.title}>
         <Input id="title" name="title" defaultValue={initial.title} maxLength={120} required />
