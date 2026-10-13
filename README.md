@@ -33,7 +33,8 @@ Sellers upload recipe PDFs, an AI turns them into interactive recipe books, and 
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase project and publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only secret key |
-| `PAYMENTS_MODE` | `mock` accepts any payment (development only). Never `mock` in production |
+| `PAYMENTS_MODE` | `mock` accepts any payment (development only, never in production). `wompi` uses Wompi Web Checkout |
+| `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_EVENTS_SECRET`, `WOMPI_INTEGRITY_SECRET` | Wompi credentials, server only. Sandbox (`pub_test_`...) or production (`pub_prod_`...), never mixed. Sandbox keys are refused in production |
 | `NEXT_PUBLIC_SITE_URL` | Public origin (OAuth redirects, share links) |
 | `AI_PROVIDER` | `mock` or `anthropic`. Empty: anthropic if `ANTHROPIC_API_KEY` is set, else mock |
 | `ANTHROPIC_API_KEY` | Claude API key (server-only) |
@@ -55,7 +56,7 @@ A seller creates a product (a named draft book) and uploads one or several PDFs 
 
 ## Payments
 
-`src/lib/payments` defines the `PaymentProvider` port with two kinds: `purchase` (a buyer buys a book) and `subscription` (a seller pays the monthly plan). `MockPaymentProvider` confirms any payment only when `PAYMENTS_MODE=mock` and never in production. Rows in `purchases` and `subscriptions` are written server-side with the service role (`fulfill.ts`), tied to the auth user, with amounts taken from the database or `SELLER_PLAN`. To add a real gateway, implement `createCheckout` and `parseWebhook` (verify the signature), then register it in `getPaymentProvider`; `/api/webhooks/payments` already dispatches by kind.
+`src/lib/payments` defines the `PaymentProvider` port with two kinds: `purchase` (a buyer buys a book) and `subscription` (a seller pays the monthly plan). `MockPaymentProvider` confirms any payment only when `PAYMENTS_MODE=mock` and never in production. Rows in `purchases` and `subscriptions` are written server-side with the service role (`fulfill.ts`), tied to the auth user, with amounts taken from the database or `SELLER_PLAN`. **Wompi (`PAYMENTS_MODE=wompi`).** The platform's single Wompi account collects ALL payments (book purchases and the seller subscription); sellers fill a "Cuenta para pagos" (`/vendedor/pagos`) and the platform disburses their earnings manually. Flow: `createCheckout` stores a row in `payment_checkouts` (reference, kind, subject, user, amount; service role only) and redirects the browser to Wompi's hosted checkout with a server-computed integrity signature. Access is granted only (1) by the webhook `POST /api/webhooks/payments`, which verifies the event checksum (`X-Event-Checksum`, constant-time, property list read from each event) and checks amount, currency and environment against the stored checkout, or (2) by the return page `/pagos/resultado?id=<txId>` (`/pagos/resultado/suscripcion` for the seller plan), which reads the transaction from Wompi server-to-server with the private key and reconciles through the same idempotent path (this is what makes it work on localhost, where the webhook cannot arrive). The redirect alone never grants access. In the Wompi dashboard (Developers > Events) set the Events URL to `https://<domain>/api/webhooks/payments`, separately for Sandbox and Production. To add another gateway, implement `createCheckout` and `parseWebhook` and register it in `getPaymentProvider`.
 
 ## Security model
 
@@ -63,4 +64,4 @@ RLS is on every table and is read-only for clients. Books are visible when publi
 
 ## Legal
 
-`/privacidad` and `/terminos` are placeholders ("Documento en revisión legal"). They reference Colombia's Ley 1581 de 2012 and must be reviewed by a lawyer before launch.
+`/privacidad` and `/terminos` are generic documents. They reference Colombia's Ley 1581 de 2012 and should be reviewed by a lawyer before scaling.

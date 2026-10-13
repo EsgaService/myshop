@@ -26,13 +26,14 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 /auth/callback | /auth/signout
 /explorar                  marketplace of listed books (public)
 /mis-recetarios            buyer library | /mis-recetarios/perfil
-/vendedor                  seller dashboard | /perfil | /productos | /productos/[bookId] | /suscripcion
+/vendedor                  seller dashboard | /perfil | /productos | /productos/[bookId] | /suscripcion | /pagos (Cuenta para pagos)
 /[seller]                  public seller store
 /[seller]/[book]           product page | /pagar checkout | /recetario interactive book
-/privacidad | /terminos    PLACEHOLDER legal pages ("Documento en revisión legal")
+/privacidad | /terminos    generic legal pages (privacy policy, terms)
 /api/pay/book/[bookId]     POST purchase
 /api/books/[bookId]/pdfs/[uploadId]  GET original PDF: 404 on any denial, else 302 to a 60 s signed URL (owner or purchaser only)
-/api/webhooks/payments     kind-aware (purchase | subscription)
+/api/webhooks/payments     Wompi Events URL; provider.parseWebhook then fulfill (kind-aware: purchase | subscription)
+/pagos/resultado           Wompi return page for purchases (?id=txId); /pagos/resultado/suscripcion for the seller subscription (signed-out sellers go to /vendedor/ingresar). Server-side reconciliation: approved/pending/declined/unfulfilled
 /api/ingestion/run         POST, Bearer INGESTION_WORKER_SECRET
 /api/ingestion/jobs/[id]   GET job status (owner only)
 ```
@@ -43,7 +44,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 
 ## Data model
 
-- `profiles` (role, display data), `sellers` (slug, store profile, `is_platform`), `subscriptions` (paid periods), `books` (draft/published/archived, price, branding, `upload_id`, `legacy_store_id`), `book_uploads` (PDF in bucket `seller-pdfs`, max 12 active per seller enforced by trigger; `book_id` = owning product, set when the upload is requested; `teaser` = that PDF's public teaser; `removed_at` = soft removal), `ingestion_jobs` (Postgres queue).
+- `profiles` (role, display data), `sellers` (slug, store profile, `is_platform`), `subscriptions` (paid periods), `books` (draft/published/archived, price, branding, `upload_id`, `legacy_store_id`), `book_uploads` (PDF in bucket `seller-pdfs`, max 12 active per seller enforced by trigger; `book_id` = owning product, set when the upload is requested; `teaser` = that PDF's public teaser; `removed_at` = soft removal), `ingestion_jobs` (Postgres queue), `payment_checkouts` (server-side record of every hosted checkout: unique `reference`, kind, subject_id, user_id, amount, currency, status, provider_transaction_id; RLS on and NO client policies, service role only), `seller_payout_accounts` (one row per seller: bank or wallet, institution, holder and document; no client grants at all: read and written only with the service role, the UI shows only the masked number).
 - `recipes`, `book_sections` and `recipe_categories` have a nullable `upload_id` (provenance; null for legacy/seed rows). "Ingested" means `book_uploads.status = 'ready'`, NOT `book_id is not null`. `books.upload_id` is kept but no longer written; the book teaser is the teaser of the earliest active ready PDF (legacy books keep theirs).
 - `recipe_categories`, `recipes`, `book_sections`, `purchases` are keyed by `book_id`. Legacy rows reuse `stores.id` as `books.id`; `stores` and `store_id` are kept (nullable) for rollback and for `npm run import:book`.
 - RPCs (service role only): `claim_ingestion_job()` (SKIP LOCKED; stale jobs are reclaimed only while `attempts < max_attempts`, max 3 jobs running at once), `create_book_from_ingestion()` (merges one upload into its product under the product lock; idempotent per upload; discards the result of a removed upload; falls back to creating a product for in-flight uploads without one), `remove_upload_from_book()` (locks the product, deletes only that upload's recipes/sections, prunes empty categories, renumbers positions, recomputes the teaser, soft-removes the upload; raises `last_ready_pdf`; the `removeUpload` action shows a clear Spanish error when the RPC is missing, PGRST202 / 42883), `move_upload_to_book()` (locks both products by id, then the upload; moves a READY PDF's recipes/sections to another non-legacy, non-archived product of the same seller, reusing categories by slug and suffixing colliding recipe slugs `-2`, `-3`; prunes empty source categories, renumbers and recomputes teasers in both; raises `last_ready_pdf`, `upload_not_ready`, `invalid_target`, `upload_not_owned`; returns `source_empty`; the `moveUpload` action maps a missing RPC to "Mover PDFs todavía no está disponible") and `grant_subscription_period()` (per-seller lock, idempotent per `provider_ref`, month-end anchored).
@@ -61,7 +62,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Recipes and book sections are delivered ONLY by RLS to buyers with a `purchases` row for that book, or to the owner seller.
 - All writes are server-side with the service role, behind `requireSeller()`/`requireBuyer()` and `.eq("seller_id", seller.id)`. RLS is read-only: no client write policies exist on any table. Keep it that way.
 - `purchases` and `subscriptions` are written ONLY from `src/lib/payments/fulfill.ts`. Prices come from the database (`books.price_cents`, `SELLER_PLAN`), never from the client.
-- Payments follow the port/adapter pattern: `PaymentProvider` (`src/lib/payments/types.ts`, has `kind`), `MockPaymentProvider` is the only adapter. `getPaymentProvider` throws `PaymentsDisabledError` for `mock` in production, and `src/instrumentation.ts` logs an error at boot.
+- Payments follow the port/adapter pattern: `PaymentProvider` (`src/lib/payments/types.ts`, has `kind`), Adapters: `MockPaymentProvider` (dev) and `WompiPaymentProvider` (`src/lib/payments/wompi/`, no SDK: REST only). `parseWebhook` returns a `WebhookOutcome` (invalid | ignored | rejected | event). The shared `applyPaymentEvent` (`apply-payment-event.ts`, wired in `fulfillment.ts`) turns a trusted event into access for both the webhook and the return page. The platform's single Wompi account collects everything; a per-seller gateway is a future adapter resolved per seller. `getPaymentProvider` throws `PaymentsDisabledError` for `mock` in production and for Wompi sandbox keys (or missing/mixed keys) in production, and `src/instrumentation.ts` logs an error at boot.
 - `SUPABASE_SERVICE_ROLE_KEY` and `ANTHROPIC_API_KEY` are server-only.
 - Business rules live in pure deciders with tests first (strict TDD). Do not put them in components or actions.
 
@@ -93,9 +94,25 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Book branding utilities are `book-*` (`bg-book-primary`, ...) to avoid clashing with the app tokens (`bg`, `surface`, `fg`, `primary`).
 - If `npm run typecheck` fails on stale generated types, delete `.next/types` and `.next/dev/types`.
 
+## Wompi
+
+- Env (server only): `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_EVENTS_SECRET`, `WOMPI_INTEGRITY_SECRET` and `PAYMENTS_MODE=wompi`. The environment (test or prod) comes from the public key prefix; every other key must match or the provider is refused. `NEXT_PUBLIC_SITE_URL` is required (the redirect-url is `<site>/pagos/resultado`).
+- Checkout links expire after 1 hour (part of the integrity signature, stored in `payment_checkouts.expires_at`). A still-valid pending checkout of the same user+subject+amount (>= 10 min left) is reused (same URL) instead of creating another one. References are `mys-p-<hex>` (purchase) or `mys-s-<hex>` (subscription) and double as the `provider_ref` for idempotency in `purchases`/`subscriptions`.
+- Return URL origin: `NEXT_PUBLIC_SITE_URL`; outside production the request origin is the fallback; in production nothing else is trusted. Without an absolute origin `createCheckout` throws `PaymentsDisabledError` mentioning NEXT_PUBLIC_SITE_URL (nothing is stored).
+- Webhook: the checksum is verified, then the transaction is re-fetched from Wompi's API (private key) and ITS reference/amount/currency/status are used. 401 only for a bad checksum; 200 for irrelevant events, rejections (mismatch) and unfulfillable payments; a thrown error (5xx) when the API is unreachable so Wompi retries (30 min, 3 h, 24 h).
+- Fulfillment uses the amount stored on the checkout (server-computed from the DB at creation and verified against Wompi), NOT the live book price. A paid purchase is refused only if the book is missing or archived; the checkout is then flagged `approved_unfulfilled` (support must refund) and the buyer sees a "contact support, we will refund" screen. An approved subscription payment always grants.
+- Checkout status machine (`checkout-status.ts`): `approved` is final except for a later `voided`; `voided` after an approval is only flagged (logged, access NOT revoked, manual review); `declined`/`error` never downgrade a paid, unfulfilled or voided checkout.
+- Only an APPROVED transaction has to match the stored amount/currency; a DECLINED/VOIDED/ERROR one with different numbers is just recorded.
+- Return page: answers from our own record when the webhook already settled the user's transaction; otherwise it calls Wompi only if the user has at least one checkout and under a per-user in-memory rate limit (20/min per server instance). `next` on the sign-in redirect is re-validated by `decidePostLogin` in the auth callback.
+- `server-only` is deliberately NOT imported in `wompi/config.ts`, `signature.ts` or `client.ts`: their unit tests import them and `server-only` throws under vitest. Secrets only reach them from server code (stores, route handlers, provider factory).
+
 ## Pending assumptions (review before launch)
 
-- Legal text in `/privacidad` and `/terminos` is a PLACEHOLDER (`src/lib/legal/content.ts`). **A lawyer must review it** (Colombia's Ley 1581 de 2012 applies to personal data).
+- Per-seller gateway configuration ("Configurar pasarelas", Wompi first) is planned for later; the `PaymentProvider` port is kept ready for it but nothing is built.
+- No audit trail for payout account changes (who changed the account and when, previous values). Add one before real money flows: a changed payout account is a classic fraud vector.
+- Payout account data (`seller_payout_accounts`) is sensitive personal data (Ley 1581 de 2012) and needs legal review. Disbursement ("dispersion") to sellers is MANUAL; publishing is not blocked when the account is missing.
+
+- Legal text in `/privacidad` and `/terminos` is generic copy (`src/lib/legal/content.ts`). **A lawyer review is recommended before scaling** (Colombia's Ley 1581 de 2012 applies to personal data).
 - Landing copy says payments go through "pasarelas de pago" while only the mock exists: needs legal/marketing review.
 - Price bounds (5.000 to 1.000.000 COP), the 20 MB limit and the 12-upload cap are assumptions.
 - Changing a seller slug breaks previously shared links (no redirect history): the slug is locked while any book is published, but a seller who unpublishes everything can still change it.
@@ -111,6 +128,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 3. In production, schedule a cron that calls `POST /api/ingestion/run` with `Authorization: Bearer $INGESTION_WORKER_SECRET`.
 4. Disable the Supabase Email provider.
 5. Have a lawyer review `/privacidad` and `/terminos`.
+5b. Wompi setup: create the sandbox keys (Developers > Keys), fill the four `WOMPI_*` vars in `.env.local` and set `PAYMENTS_MODE=wompi`. In Developers > Events set the Events URL to `https://<domain>/api/webhooks/payments` for Sandbox and again for Production (localhost works through the return page only; use a tunnel to test the webhook). For production use `pub_prod_`/`prv_prod_`/`prod_events_`/`prod_integrity_` keys.
 6. Deploy to Vercel with a custom domain:
    - **`PAYMENTS_MODE` must NOT be `mock` in production**, because mock grants free access. Leave it empty until a real gateway exists.
    - Supabase: Site URL and Redirect URL `https://<domain>/auth/callback`.
