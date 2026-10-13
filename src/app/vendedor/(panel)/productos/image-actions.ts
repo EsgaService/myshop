@@ -10,8 +10,9 @@ import { choiceErrorMessage } from "@/lib/images/choice-error-message";
 import { customImagePaths, customTempPath, isOwnTempPath } from "@/lib/images/custom-image-paths";
 import { decideCover, decidePhotoChoice } from "@/lib/images/decide-photo-choice";
 import type { ImageRef } from "@/lib/images/decide-photo-choice";
-import { encodeCustomImage } from "@/lib/images/encode-custom-image";
+import { decodeCustomImage } from "@/lib/images/decode-custom-image";
 import { parseImageChoice } from "@/lib/images/parse-image-choice";
+import { sharpEncoder } from "@/lib/images/sharp-encoder";
 import {
   customImageErrorMessage,
   CUSTOM_IMAGE_MAX_BYTES,
@@ -184,7 +185,7 @@ async function storeCustomImage(
 
   let encoded;
   try {
-    encoded = await encodeCustomImage(bytes);
+    encoded = await sharpEncoder.toWebp(await decodeCustomImage(bytes));
   } catch {
     await dropTemp();
     return { ok: false, message: "No pudimos leer esa imagen. Prueba con otro archivo." };
