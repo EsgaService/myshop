@@ -1,9 +1,11 @@
+import { BookOpenText, Eye } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { bookPaths, storePath } from "@/lib/books/share-links";
 import type { Book, SellerUpload } from "@/lib/data/types";
 import type { MovablePdf } from "@/lib/seller/movable-pdfs";
+import { buttonClasses } from "@/lib/ui/cn";
 import { AddExistingPdfsControl } from "./AddExistingPdfsControl";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { DeleteProductButton } from "./DeleteProductButton";
@@ -70,15 +72,20 @@ export function ProductRow({
 
       <PricePublishControl bookId={book.id} priceCents={book.price_cents} published={published} />
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <a href={paths.landing} target="_blank" rel="noopener" className={buttonClasses({ className: "w-full min-w-0" })}>
+          <Eye size={18} weight="bold" aria-hidden />
+          <span className="truncate">Previsualizar página de venta</span>
+        </a>
+        <a href={paths.book} target="_blank" rel="noopener" className={buttonClasses({ variant: "outline", className: "w-full min-w-0" })}>
+          <BookOpenText size={18} weight="bold" aria-hidden />
+          <span className="truncate">Previsualizar recetario</span>
+        </a>
+      </div>
+
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4">
         <CopyLinkButton label="Copiar enlace de la tienda" path={storePath(sellerSlug)} siteUrl={siteUrl} />
         <CopyLinkButton label="Copiar enlace del recetario" path={paths.landing} siteUrl={siteUrl} />
-        <a href={paths.landing} target="_blank" rel="noopener" className="text-sm font-medium text-primary hover:underline">
-          Previsualizar página de venta
-        </a>
-        <a href={paths.book} target="_blank" rel="noopener" className="text-sm font-medium text-primary hover:underline">
-          Previsualizar recetario
-        </a>
         {canDelete && <DeleteProductButton bookId={book.id} />}
         <Link href={`/vendedor/productos/${book.id}`} className="ml-auto text-sm font-medium text-primary hover:underline">
           Editar detalles
