@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { BookUnavailable } from "@/components/books/BookUnavailable";
+import { CoverImage } from "@/components/books/CoverImage";
 import { loadBookContext } from "@/lib/access/load-book-context";
+import { resolveCoverUrl } from "@/lib/books/cover-url";
 import { formatPrice } from "@/lib/format";
 import { tryGetPaymentProvider } from "@/lib/payments";
 import { PayForm } from "./PayForm";
@@ -16,9 +18,15 @@ export default async function CheckoutPage({ params }: { params: Promise<{ selle
   const { book, email } = ctx;
   // Goes through the provider factory so mock mode is refused in production (R19).
   const provider = tryGetPaymentProvider();
+  const coverUrl = resolveCoverUrl(book.cover_url);
 
   return (
     <main className="mx-auto max-w-md px-4 py-10">
+      {coverUrl && (
+        <div className="relative mb-6 aspect-[4/3] overflow-hidden rounded-xl" style={{ background: "var(--brand-primary)" }}>
+          <CoverImage src={coverUrl} />
+        </div>
+      )}
       <h1 className="text-2xl font-bold">{book.title}</h1>
       <p className="mt-1 text-3xl font-extrabold" style={{ color: "var(--brand-primary)" }}>
         {formatPrice(book.price_cents, book.currency)}
