@@ -1,5 +1,5 @@
 /**
- * Payment port. Adapters (mock, dLocal Go, Mercado Pago, Stripe...) implement
+ * Payment port. Adapters (mock, Wompi, ...) implement
  * this interface. Fulfillment (writing the purchase row) is NOT done by the
  * adapter: it is done by server code that trusts either a synchronous `paid`
  * result from a trusted adapter or a verified webhook event.
@@ -35,16 +35,33 @@ export type PaymentEvent = {
   userId: string;
   amountCents: number;
   currency: string;
+  /** Gateway-side transaction id, kept for support and reconciliation. */
+  providerTransactionId?: string;
+  /** The real gateway status behind the event (a voided payment is not the same as a declined one). */
+  gatewayStatus?: "approved" | "declined" | "voided" | "error";
 };
+
+/**
+ * Result of verifying and interpreting a gateway webhook.
+ * - `invalid`: the request is not authentic (bad signature, malformed body).
+ * - `ignored`: authentic but nothing to do (pending, unrelated event, unknown reference). Answer 200.
+ * - `rejected`: authentic but must not be fulfilled (amount, currency or environment mismatch).
+ * - `event`: authentic and consistent with our own checkout record.
+ */
+export type WebhookOutcome =
+  | { status: "invalid" }
+  | { status: "ignored"; reason: string }
+  | { status: "rejected"; reason: string }
+  | { status: "event"; event: PaymentEvent };
 
 export interface PaymentProvider {
   readonly id: string;
   createCheckout(input: CheckoutInput): Promise<CheckoutResult>;
   /**
-   * Verify the signature and parse a gateway webhook. Must return null when the
+   * Verify the signature and interpret a gateway webhook. Must answer `invalid` when the
    * request is not authentic. Not needed by synchronous adapters like the mock.
    */
-  parseWebhook?(request: { headers: Headers; rawBody: string }): Promise<PaymentEvent | null>;
+  parseWebhook?(request: { headers: Headers; rawBody: string }): Promise<WebhookOutcome>;
 }
 
 export class PaymentsDisabledError extends Error {

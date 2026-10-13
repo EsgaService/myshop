@@ -18,6 +18,7 @@ export const RESERVED_SLUGS: readonly string[] = Object.freeze([
   "myshop",
   "cocteles",
   "micheladas",
+  "pagos",
 ]);
 
 export function isReservedSlug(slug: string): boolean {

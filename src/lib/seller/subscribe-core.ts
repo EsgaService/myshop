@@ -38,6 +38,7 @@ export async function runSubscribe(input: {
     return { ok: true };
   } catch (error) {
     if (error instanceof PaymentsDisabledError) {
+      console.error("subscription checkout refused", error.message);
       return { ok: false, message: "Los pagos no están habilitados en este entorno." };
     }
     console.error("subscription checkout failed", error);

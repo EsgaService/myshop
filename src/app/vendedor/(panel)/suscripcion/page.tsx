@@ -56,6 +56,9 @@ export default async function SubscriptionPage() {
           {provider ? (
             <>
               <SubscribeForm label={active ? "Pagar el siguiente mes" : "Activar suscripción"} />
+              {provider.id === "wompi" && (
+                <p className="text-xs text-fg-muted">Pagas en Wompi (tarjeta, PSE, Nequi u otros medios) y te traemos de vuelta aquí al terminar.</p>
+              )}
               {provider.id === "mock" && (
                 <p className="text-xs text-fg-muted">Entorno de pruebas: el pago se simula y no se cobra dinero real.</p>
               )}

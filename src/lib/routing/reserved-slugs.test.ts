@@ -4,7 +4,7 @@ import { RESERVED_SLUGS, isReservedSlug } from "./reserved-slugs";
 describe("isReservedSlug", () => {
   it.each([
     "api", "auth", "login", "ingresar", "vendedor", "mis-recetarios", "explorar",
-    "privacidad", "terminos", "admin", "ayuda", "precios", "myshop", "cocteles", "micheladas",
+    "privacidad", "terminos", "admin", "ayuda", "precios", "myshop", "cocteles", "micheladas", "pagos",
   ])("reserves %s", (slug) => {
     expect(isReservedSlug(slug)).toBe(true);
   });
@@ -18,8 +18,8 @@ describe("isReservedSlug", () => {
     expect(isReservedSlug(slug)).toBe(false);
   });
 
-  it("exposes a frozen list of 15 entries", () => {
-    expect(RESERVED_SLUGS).toHaveLength(15);
+  it("exposes a frozen list of 16 entries", () => {
+    expect(RESERVED_SLUGS).toHaveLength(16);
     expect(Object.isFrozen(RESERVED_SLUGS)).toBe(true);
   });
 });

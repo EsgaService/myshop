@@ -4,6 +4,7 @@ import { getBookById, getCurrentUser, getProfile, hasPurchasedBook } from "@/lib
 import { getPaymentProvider, PaymentsDisabledError } from "@/lib/payments";
 import { decidePurchase } from "@/lib/payments/decide-purchase";
 import { grantPurchase } from "@/lib/payments/fulfill";
+import { resolveSiteOrigin } from "@/lib/payments/site-origin";
 import { getSellerAccess } from "@/lib/seller/access";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,6 +38,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
 
   try {
     const provider = getPaymentProvider();
+    // Configured site URL; outside production the request origin is an acceptable fallback.
+    const origin = resolveSiteOrigin({
+      siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+      requestOrigin: new URL(request.url).origin,
+      nodeEnv: process.env.NODE_ENV,
+    });
     // Price and currency always come from the database, never from the client.
     const result = await provider.createCheckout({
       kind: "purchase",
@@ -46,7 +53,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
       currency: book.currency,
       payer: { name: typeof payload.name === "string" ? payload.name : undefined, email: user.email },
       extra: payload,
-      returnUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}${paths.book}`,
+      returnUrl: `${origin ?? ""}${paths.book}`,
     });
 
     if (result.status === "redirect") {
@@ -64,6 +71,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ boo
     return NextResponse.json({ ok: true, redirectTo: paths.book });
   } catch (e) {
     if (e instanceof PaymentsDisabledError) {
+      console.error("checkout refused", e.message);
       return NextResponse.json({ error: "Los pagos no están habilitados en este entorno." }, { status: 403 });
     }
     console.error("checkout failed", e);

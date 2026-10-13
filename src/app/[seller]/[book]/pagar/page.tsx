@@ -4,6 +4,7 @@ import { loadBookContext } from "@/lib/access/load-book-context";
 import { formatPrice } from "@/lib/format";
 import { tryGetPaymentProvider } from "@/lib/payments";
 import { PayForm } from "./PayForm";
+import { WompiPayButton } from "./WompiPayButton";
 
 export default async function CheckoutPage({ params }: { params: Promise<{ seller: string; book: string }> }) {
   const { seller: sellerSlug, book: bookSlug } = await params;
@@ -26,6 +27,8 @@ export default async function CheckoutPage({ params }: { params: Promise<{ selle
 
       {provider?.id === "mock" ? (
         <PayForm bookId={book.id} />
+      ) : provider?.id === "wompi" ? (
+        <WompiPayButton bookId={book.id} />
       ) : (
         <p className="mt-8 rounded-xl border border-black/10 p-4">Los pagos aún no están habilitados. Vuelve pronto.</p>
       )}
