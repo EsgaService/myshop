@@ -1,6 +1,7 @@
 import { formatPrice } from "@/lib/format";
 import { roleHome } from "@/lib/account/decide-post-login";
 import type { AccountRole } from "@/lib/account/decide-role";
+import { LEGAL_OWNER } from "@/lib/legal/content";
 import { SELLER_PLAN } from "@/lib/seller/decide-subscription";
 
 export type Cta = { label: string; href: string };
@@ -55,6 +56,10 @@ export const LANDING = {
       { label: "Política de privacidad", href: "/privacidad" },
       { label: "Términos y condiciones", href: "/terminos" },
     ] satisfies Cta[],
+    owner: {
+      text: `Sitio administrado por ${LEGAL_OWNER.name} · CC ${LEGAL_OWNER.documentNumber} · ${LEGAL_OWNER.email}`,
+      href: "/terminos",
+    },
   },
 } as const;
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as content from "./content";
-import { LEGAL_CONTACT_EMAIL, LEGAL_LAST_UPDATED, PRIVACY, TERMS } from "./content";
+import { LEGAL_CONTACT_EMAIL, LEGAL_LAST_UPDATED, LEGAL_OWNER, PRIVACY, TERMS } from "./content";
 
 const flatten = (doc: content.LegalDocument) =>
   doc.sections.map((s) => `${s.heading} ${s.body.join(" ")}`).join(" ");
@@ -11,8 +11,31 @@ describe("legal content", () => {
   });
 
   it("exports last-updated date and contact email", () => {
-    expect(LEGAL_LAST_UPDATED).toBe("12 de octubre de 2026");
+    expect(LEGAL_LAST_UPDATED).toBe("13 de octubre de 2026");
     expect(LEGAL_CONTACT_EMAIL).toBe("victorup1902@gmail.com");
+  });
+
+  it("exposes the legal owner of the site", () => {
+    expect(LEGAL_OWNER).toEqual({
+      name: "Víctor Ortiz",
+      personType: "Persona natural",
+      documentType: "Cédula de ciudadanía",
+      documentNumber: "1090525663",
+      email: LEGAL_CONTACT_EMAIL,
+      country: "Colombia",
+    });
+  });
+
+  it("terms and privacy identify the owner and open with the legal information", () => {
+    for (const doc of [PRIVACY, TERMS]) {
+      const text = flatten(doc);
+      expect(text).toContain("Víctor Ortiz");
+      expect(text).toContain("1090525663");
+      expect(text).toContain("persona natural");
+    }
+    expect(TERMS.sections[0].heading).toBe("1. Información legal del responsable");
+    expect(TERMS.sections[0].body.join(" ")).toContain("myshop.lat");
+    expect(PRIVACY.sections[0].body.join(" ")).toContain("Víctor Ortiz");
   });
 
   it("privacy policy cites the Colombian data protection framework", () => {

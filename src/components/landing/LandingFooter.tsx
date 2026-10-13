@@ -9,13 +9,18 @@ export function LandingFooter() {
         <Logo className="text-lg" />
         <nav aria-label="Legal" className="flex gap-5">
           {LANDING.footer.links.map((l) => (
-            <Link key={l.href} href={l.href} className="transition-colors hover:text-fg">
+            <Link key={l.href} href={l.href} className="underline-offset-4 transition-colors hover:text-fg hover:underline">
               {l.label}
             </Link>
           ))}
         </nav>
         <p className="font-mono text-xs">&copy; {new Date().getFullYear()} Recetarios</p>
       </div>
+      <p className="mx-auto max-w-6xl px-4 pb-8 text-center text-xs text-fg-muted sm:px-6">
+        <Link href={LANDING.footer.owner.href} className="underline-offset-4 transition-colors hover:text-fg hover:underline">
+          {LANDING.footer.owner.text}
+        </Link>
+      </p>
     </footer>
   );
 }

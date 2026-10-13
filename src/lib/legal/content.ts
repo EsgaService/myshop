@@ -5,8 +5,18 @@
 export type LegalSection = { heading: string; body: string[] };
 export type LegalDocument = { title: string; sections: LegalSection[] };
 
-export const LEGAL_LAST_UPDATED = "12 de octubre de 2026";
+export const LEGAL_LAST_UPDATED = "13 de octubre de 2026";
 export const LEGAL_CONTACT_EMAIL = "victorup1902@gmail.com";
+
+/** Legal owner of the site (natural person), shown in the legal pages and the landing footer. */
+export const LEGAL_OWNER = {
+  name: "Víctor Ortiz",
+  personType: "Persona natural",
+  documentType: "Cédula de ciudadanía",
+  documentNumber: "1090525663",
+  email: LEGAL_CONTACT_EMAIL,
+  country: "Colombia",
+} as const;
 
 const EMAIL = LEGAL_CONTACT_EMAIL;
 
@@ -16,7 +26,7 @@ export const PRIVACY: LegalDocument = {
     {
       heading: "1. Responsable del tratamiento",
       body: [
-        "MyShop, disponible en myshop.lat, es el responsable del tratamiento de los datos personales que recopila a través de la plataforma.",
+        `MyShop, disponible en myshop.lat, es administrado por ${LEGAL_OWNER.name}, ${LEGAL_OWNER.personType.toLowerCase()}, identificado con cédula de ciudadanía No. ${LEGAL_OWNER.documentNumber}, quien es el responsable del tratamiento de los datos personales que se recopilan a través de la plataforma.`,
         `Para cualquier consulta, solicitud o reclamo sobre tus datos puedes escribirnos a ${EMAIL}.`,
       ],
     },
@@ -129,21 +139,28 @@ export const TERMS: LegalDocument = {
   title: "Términos y condiciones de uso",
   sections: [
     {
-      heading: "1. Aceptación de los términos",
+      heading: "1. Información legal del responsable",
+      body: [
+        `MyShop, disponible en myshop.lat, es administrado por ${LEGAL_OWNER.name}, ${LEGAL_OWNER.personType.toLowerCase()}, identificado con cédula de ciudadanía No. ${LEGAL_OWNER.documentNumber}, domiciliado en ${LEGAL_OWNER.country}, con correo de contacto ${EMAIL}.`,
+        `${LEGAL_OWNER.name} es responsable del sitio y de la relación comercial con los usuarios de la plataforma.`,
+      ],
+    },
+    {
+      heading: "2. Aceptación de los términos",
       body: [
         "Estos términos regulan el uso de MyShop (myshop.lat). Al crear una cuenta, comprar, vender o navegar en la plataforma aceptas estos términos y la política de privacidad. Si no estás de acuerdo, no uses el servicio.",
         "La aceptación se realiza por medios electrónicos y tiene plena validez conforme a la Ley 527 de 1999 sobre comercio electrónico y mensajes de datos.",
       ],
     },
     {
-      heading: "2. Descripción del servicio",
+      heading: "3. Descripción del servicio",
       body: [
         "MyShop es un marketplace en el que vendedores (creadores) publican productos digitales, concretamente recetarios interactivos generados con inteligencia artificial a partir de sus propios PDF, y compradores los adquieren para consulta personal.",
         "MyShop actúa como intermediario tecnológico. El contenido de cada producto es responsabilidad del vendedor que lo publica.",
       ],
     },
     {
-      heading: "3. Cuentas y roles",
+      heading: "4. Cuentas y roles",
       body: [
         "El acceso se realiza únicamente con una cuenta de Google. Debes ser mayor de 18 años o contar con la autorización de tu representante legal.",
         "Cada cuenta tiene un rol exclusivo, comprador o vendedor, que se define al crear la cuenta y no puede cambiarse después. Un vendedor no puede comprar con su cuenta de vendedor.",
@@ -151,7 +168,7 @@ export const TERMS: LegalDocument = {
       ],
     },
     {
-      heading: "4. Obligaciones del vendedor",
+      heading: "5. Obligaciones del vendedor",
       body: [
         "Declaras ser titular de los derechos sobre los archivos y contenidos que subes, o contar con la autorización necesaria para usarlos y comercializarlos.",
         "No puedes subir contenido que infrinja derechos de terceros, sea ilegal, engañoso, ofensivo o que contenga datos personales de terceros sin autorización.",
@@ -160,7 +177,7 @@ export const TERMS: LegalDocument = {
       ],
     },
     {
-      heading: "5. Suscripción del vendedor",
+      heading: "6. Suscripción del vendedor",
       body: [
         "Para subir PDF, generar recetarios y mantener productos publicados, el vendedor debe tener una suscripción activa de 50.000 COP al mes.",
         "La suscripción se paga por periodos mensuales y se renueva mientras se mantenga activa. Si el periodo vence sin renovarse, tus productos dejan de mostrarse en el marketplace y no podrás recibir nuevas ventas hasta que renueves.",
@@ -168,7 +185,7 @@ export const TERMS: LegalDocument = {
       ],
     },
     {
-      heading: "6. Compras y pagos",
+      heading: "7. Compras y pagos",
       body: [
         "El precio de cada producto se muestra en pesos colombianos (COP) antes de que realices el pago.",
         "Los pagos se procesan a través de pasarelas de pago de terceros, que tratan directamente tus datos de pago. MyShop no almacena datos de tarjetas.",
@@ -176,14 +193,14 @@ export const TERMS: LegalDocument = {
       ],
     },
     {
-      heading: "7. Licencia de uso para el comprador",
+      heading: "8. Licencia de uso para el comprador",
       body: [
         "Al comprar un producto obtienes una licencia personal, no exclusiva e intransferible para consultarlo y usarlo para fines propios.",
         "No puedes copiar, redistribuir, revender, compartir tu acceso ni publicar el contenido, total o parcialmente, sin autorización del titular de los derechos.",
       ],
     },
     {
-      heading: "8. Derecho de retracto",
+      heading: "9. Derecho de retracto",
       body: [
         "Conforme al artículo 47 de la Ley 1480 de 2011 (Estatuto del Consumidor), el derecho de retracto aplica en los casos previstos por la ley y tiene las excepciones que ella establece.",
         `Si consideras que te asiste el derecho de retracto, puedes solicitarlo por escrito a ${EMAIL} dentro de los cinco (5) días hábiles siguientes a la entrega del producto, indicando tu nombre, el correo de tu cuenta y el producto comprado.`,
@@ -192,7 +209,7 @@ export const TERMS: LegalDocument = {
       ],
     },
     {
-      heading: "9. Reembolsos, garantía y reclamaciones",
+      heading: "10. Reembolsos, garantía y reclamaciones",
       body: [
         "Los productos están cubiertos por la garantía legal prevista en la Ley 1480 de 2011 cuando el contenido no corresponda a lo ofrecido o presente fallas que impidan su uso.",
         `Puedes presentar peticiones, quejas y reclamos (PQR) en ${EMAIL}. Te daremos respuesta en un plazo razonable y, en todo caso, dentro de los términos de ley.`,
@@ -200,53 +217,53 @@ export const TERMS: LegalDocument = {
       ],
     },
     {
-      heading: "10. Propiedad intelectual",
+      heading: "11. Propiedad intelectual",
       body: [
         "Los derechos sobre la marca, el diseño y el software de MyShop pertenecen a MyShop. Los derechos sobre el contenido de cada producto pertenecen al vendedor o a sus licenciantes.",
         "El vendedor nos concede una licencia limitada y no exclusiva para almacenar, procesar, transformar con inteligencia artificial y mostrar su contenido con el único fin de operar el servicio.",
       ],
     },
     {
-      heading: "11. Contenido generado con inteligencia artificial",
+      heading: "12. Contenido generado con inteligencia artificial",
       body: [
         "Los recetarios se generan mediante sistemas de inteligencia artificial de terceros a partir de los PDF del vendedor. Estos sistemas pueden producir resultados inexactos o incompletos.",
         "MyShop no garantiza la exactitud de recetas, cantidades, tiempos ni indicaciones de alérgenos o de salud. Consulta siempre a un profesional ante restricciones alimentarias o condiciones médicas.",
       ],
     },
     {
-      heading: "12. Conductas prohibidas",
+      heading: "13. Conductas prohibidas",
       body: [
         "Está prohibido usar la plataforma para actividades ilegales o fraudulentas, vulnerar su seguridad, acceder a cuentas ajenas, extraer datos de forma automatizada sin autorización, suplantar identidades, subir malware o interferir con el funcionamiento del servicio.",
       ],
     },
     {
-      heading: "13. Suspensión y terminación",
+      heading: "14. Suspensión y terminación",
       body: [
         "Podemos suspender o cerrar tu cuenta, o retirar contenido, si incumples estos términos, infringes derechos de terceros o pones en riesgo la plataforma.",
         `Puedes dejar de usar el servicio y solicitar el cierre de tu cuenta en cualquier momento escribiendo a ${EMAIL}. Las obligaciones ya causadas se mantienen.`,
       ],
     },
     {
-      heading: "14. Limitación de responsabilidad",
+      heading: "15. Limitación de responsabilidad",
       body: [
         "MyShop presta el servicio tal como está disponible, sin garantizar que sea ininterrumpido o libre de errores. En la medida permitida por la ley, MyShop no responde por el contenido publicado por los vendedores, por fallas de terceros (pasarelas de pago, proveedores de nube o de inteligencia artificial) ni por daños indirectos.",
         "Lo anterior no limita los derechos irrenunciables que la ley reconoce a los consumidores.",
       ],
     },
     {
-      heading: "15. Modificaciones",
+      heading: "16. Modificaciones",
       body: [
         "Podemos modificar estos términos. La versión vigente será la publicada en esta página con su fecha de actualización. Si continúas usando el servicio después del cambio, se entiende que lo aceptas.",
       ],
     },
     {
-      heading: "16. Ley aplicable y jurisdicción",
+      heading: "17. Ley aplicable y jurisdicción",
       body: [
         "Estos términos se rigen por las leyes de la República de Colombia. Cualquier controversia se someterá a los jueces y autoridades competentes de Colombia, sin perjuicio de las competencias de la Superintendencia de Industria y Comercio en materia de consumo.",
       ],
     },
     {
-      heading: "17. Contacto",
+      heading: "18. Contacto",
       body: [`Para cualquier duda sobre estos términos escríbenos a ${EMAIL}.`],
     },
   ],
