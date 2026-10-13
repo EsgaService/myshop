@@ -73,6 +73,12 @@ export function ProductRow({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4">
         <CopyLinkButton label="Copiar enlace de la tienda" path={storePath(sellerSlug)} siteUrl={siteUrl} />
         <CopyLinkButton label="Copiar enlace del recetario" path={paths.landing} siteUrl={siteUrl} />
+        <a href={paths.landing} target="_blank" rel="noopener" className="text-sm font-medium text-primary hover:underline">
+          Previsualizar página de venta
+        </a>
+        <a href={paths.book} target="_blank" rel="noopener" className="text-sm font-medium text-primary hover:underline">
+          Previsualizar recetario
+        </a>
         {canDelete && <DeleteProductButton bookId={book.id} />}
         <Link href={`/vendedor/productos/${book.id}`} className="ml-auto text-sm font-medium text-primary hover:underline">
           Editar detalles
