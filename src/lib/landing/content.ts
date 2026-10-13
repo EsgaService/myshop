@@ -1,4 +1,5 @@
 import { formatPrice } from "@/lib/format";
+import { authPath } from "@/lib/auth/auth-mode";
 import { roleHome } from "@/lib/account/decide-post-login";
 import type { AccountRole } from "@/lib/account/decide-role";
 import { SELLER_PLAN } from "@/lib/seller/decide-subscription";
@@ -12,8 +13,9 @@ type Item = { title: string; text: string };
  */
 export const LANDING = {
   ctas: {
-    sell: { label: "Quiero vender", href: "/vendedor/ingresar" } satisfies Cta,
-    login: { label: "Iniciar sesión", href: "/ingresar" } satisfies Cta,
+    sell: { label: "Quiero vender", href: authPath("seller", "crear") } satisfies Cta,
+    login: { label: "Iniciar sesión", href: authPath("buyer", "ingresar") } satisfies Cta,
+    signup: { label: "Crear cuenta", href: authPath("buyer", "crear") } satisfies Cta,
   },
   nav: [
     { label: "Explorar", href: "/explorar" },

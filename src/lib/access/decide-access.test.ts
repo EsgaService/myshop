@@ -26,8 +26,8 @@ describe("decideAccess on the product page", () => {
 });
 
 describe("decideAccess on checkout", () => {
-  it("sends anonymous users to buyer login preserving next (R18)", () => {
-    expect(run("checkout")).toEqual({ kind: "redirect", to: "/ingresar?next=%2Fana%2Ftacos%2Fpagar" });
+  it("sends anonymous users to the buyer sign-up screen preserving next (R18)", () => {
+    expect(run("checkout")).toEqual({ kind: "redirect", to: "/ingresar?modo=crear&next=%2Fana%2Ftacos%2Fpagar" });
   });
   it("refuses sellers (R2)", () => {
     expect(run("checkout", { viewer: "seller" })).toEqual({ kind: "redirect", to: `${paths.landing}?aviso=vendedor` });

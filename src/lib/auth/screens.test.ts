@@ -16,15 +16,38 @@ describe("authScreen (R3)", () => {
     expect(authScreen("seller")).toMatchObject({ as: "seller", defaultNext: "/vendedor" });
   });
 
-  it("explains that the account is created automatically and that roles are separate", () => {
+  it("titles each mode", () => {
+    expect(authScreen("buyer", "ingresar").title).toBe("Inicia sesión");
+    expect(authScreen("buyer", "crear").title).toBe("Crea tu cuenta");
+    expect(authScreen("seller", "crear").title).toBe("Crea tu cuenta de vendedor");
+  });
+
+  it("only asks for the terms when creating an account", () => {
+    expect(authScreen("buyer", "ingresar").requiresConsent).toBe(false);
+    expect(authScreen("seller", "ingresar").requiresConsent).toBe(false);
+    expect(authScreen("buyer", "crear").requiresConsent).toBe(true);
+    expect(authScreen("seller", "crear").requiresConsent).toBe(true);
+  });
+
+  it("explains that roles are separate in both modes", () => {
     for (const role of ["buyer", "seller"] as const) {
-      expect(authScreen(role).note.toLowerCase()).toContain("automáticamente");
+      expect(authScreen(role, "crear").note.toLowerCase()).toContain("distintas");
+      expect(authScreen(role, "ingresar").note.toLowerCase()).toContain("distintas");
     }
   });
 
-  it("links to the other screen", () => {
+  it("links to the other role screen keeping the mode", () => {
     expect(authScreen("buyer").switchLink.href).toBe("/vendedor/ingresar");
     expect(authScreen("seller").switchLink.href).toBe("/ingresar");
+    expect(authScreen("buyer", "crear").switchLink.href).toBe("/vendedor/ingresar?modo=crear");
+    expect(authScreen("seller", "crear").switchLink.href).toBe("/ingresar?modo=crear");
+  });
+
+  it("links to the opposite mode of the same screen, preserving next", () => {
+    expect(authScreen("buyer", "ingresar").modeLink).toEqual({ label: "¿No tienes cuenta? Crea una", href: "/ingresar?modo=crear" });
+    expect(authScreen("buyer", "crear").modeLink).toEqual({ label: "¿Ya tienes cuenta? Inicia sesión", href: "/ingresar" });
+    expect(authScreen("seller", "crear", "/x").modeLink.href).toBe("/vendedor/ingresar?next=%2Fx");
+    expect(authScreen("seller", "ingresar", "/x").modeLink.href).toBe("/vendedor/ingresar?modo=crear&next=%2Fx");
   });
 });
 
@@ -52,6 +75,10 @@ describe("avisoMessage", () => {
 
   it("explains that sellers cannot buy", () => {
     expect(avisoMessage("vendedor", "seller")).toMatch(/no puedes comprar/i);
+  });
+
+  it("explains why the account was not created when the terms were skipped", () => {
+    expect(avisoMessage("crear-cuenta", null)).toBe("Aún no tienes cuenta. Acepta los términos para crearla.");
   });
 
   it("ignores unknown codes", () => {

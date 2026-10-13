@@ -13,6 +13,9 @@ export function FinalCta() {
           <ButtonLink href={ctas.sell.href} size="lg" variant="inverse">
             {ctas.sell.label}
           </ButtonLink>
+          <ButtonLink href={ctas.signup.href} size="lg" variant="inverse-outline">
+            {ctas.signup.label}
+          </ButtonLink>
           <ButtonLink href={ctas.login.href} size="lg" variant="inverse-outline">
             {ctas.login.label}
           </ButtonLink>

@@ -1,3 +1,5 @@
+import { authPath } from "@/lib/auth/auth-mode";
+
 export type BookRoute = "landing" | "checkout" | "book";
 export type Viewer = "anon" | "buyer" | "seller";
 
@@ -29,7 +31,7 @@ export function decideAccess({ paths, route, viewer, hasPurchase, isOwner, sella
     case "landing":
       return owned ? redirect(paths.book) : allow;
     case "checkout":
-      if (viewer === "anon") return redirect(`/ingresar?next=${encodeURIComponent(paths.checkout)}`);
+      if (viewer === "anon") return redirect(authPath("buyer", "crear", { next: paths.checkout }));
       if (viewer === "seller") return redirect(`${paths.landing}?aviso=vendedor`);
       if (owned) return redirect(paths.book);
       return sellable ? allow : redirect(paths.landing);

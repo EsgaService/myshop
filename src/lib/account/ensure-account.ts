@@ -4,6 +4,7 @@ import { slugify } from "@/lib/recipes/normalize-book";
 import { toSellerSlug } from "@/lib/seller/slug";
 import { ensureAccountCore, type AccountDeps, type EnsureAccountInput } from "./ensure-account-core";
 import type { RoleDecision } from "./decide-role";
+import type { SignupRequired } from "./ensure-account-core";
 
 function adminDeps(): AccountDeps {
   const admin = createAdminClient();
@@ -48,6 +49,6 @@ function adminDeps(): AccountDeps {
   };
 }
 
-export function ensureAccount(input: EnsureAccountInput): Promise<RoleDecision> {
+export function ensureAccount(input: EnsureAccountInput): Promise<RoleDecision | SignupRequired> {
   return ensureAccountCore(adminDeps(), input);
 }

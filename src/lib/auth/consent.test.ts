@@ -19,3 +19,9 @@ describe("CONSENT", () => {
     expect(CONSENT.error).toBe("Debes aceptar los términos para continuar");
   });
 });
+
+describe("CONSENT.param", () => {
+  it("marks sign-up callbacks with consent=1", () => {
+    expect(CONSENT.param).toEqual({ name: "consent", value: "1" });
+  });
+});

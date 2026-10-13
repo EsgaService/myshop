@@ -5,6 +5,7 @@ import { BookUnavailable } from "@/components/books/BookUnavailable";
 import { resolveCoverUrl } from "@/lib/books/cover-url";
 import { loadTeaserPhotoUrl } from "@/lib/books/load-teaser-photo";
 import { Notice } from "@/components/ui/Notice";
+import { authPath } from "@/lib/auth/auth-mode";
 import { avisoMessage } from "@/lib/auth/screens";
 import { loadBookContext } from "@/lib/access/load-book-context";
 import { formatPrice } from "@/lib/format";
@@ -75,14 +76,21 @@ export default async function BookLandingPage({
             <p className="max-w-sm text-sm">Este recetario no está disponible para la venta por ahora.</p>
           ) : (
             <>
-              {/* Anonymous visitors are sent to the buyer sign-in by the checkout route, keeping this path as `next`. */}
+              {/* Anonymous visitors go straight to buyer sign-up (terms required), keeping the checkout path as `next`. */}
               <Link
-                href={input.paths.checkout}
+                href={input.viewer === "anon" ? authPath("buyer", "crear", { next: input.paths.checkout }) : input.paths.checkout}
                 className="inline-flex items-center justify-center rounded-full bg-book-primary px-8 py-3 font-semibold text-white"
               >
                 Comprar
               </Link>
-              {input.viewer === "anon" && <p className="text-sm">Inicia sesión con Google para continuar con la compra.</p>}
+              {input.viewer === "anon" && (
+                <p className="text-sm">
+                  Crea tu cuenta con Google para continuar con la compra. ¿Ya tienes cuenta?{" "}
+                  <Link href={authPath("buyer", "ingresar", { next: input.paths.checkout })} className="font-semibold underline underline-offset-4">
+                    Inicia sesión
+                  </Link>
+                </p>
+              )}
             </>
           )}
         </div>
