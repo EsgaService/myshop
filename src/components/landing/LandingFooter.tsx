@@ -9,7 +9,7 @@ export function LandingFooter() {
         <Logo className="text-lg" />
         <nav aria-label="Legal" className="flex gap-5">
           {LANDING.footer.links.map((l) => (
-            <Link key={l.href} href={l.href} className="transition-colors hover:text-fg">
+            <Link key={l.href} href={l.href} className="underline-offset-4 transition-colors hover:text-fg hover:underline">
               {l.label}
             </Link>
           ))}

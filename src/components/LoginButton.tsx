@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useId, useState } from "react";
+import { CONSENT, canStartLogin } from "@/lib/auth/consent";
 import { createClient } from "@/lib/supabase/client";
 
 type Intent = "buyer" | "seller";
@@ -22,8 +24,16 @@ export function LoginButton({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [consentError, setConsentError] = useState(false);
+  const checkboxId = useId();
 
   async function login() {
+    if (!canStartLogin(accepted)) {
+      setConsentError(true);
+      return;
+    }
+    setConsentError(false);
     setLoading(true);
     setError(null);
     const supabase = createClient();
@@ -41,14 +51,39 @@ export function LoginButton({
 
   return (
     <div>
+      <div className="mb-4 flex items-start gap-2 text-left text-sm text-fg-muted">
+        <input
+          id={checkboxId}
+          type="checkbox"
+          checked={accepted}
+          onChange={(e) => {
+            setAccepted(e.target.checked);
+            if (e.target.checked) setConsentError(false);
+          }}
+          aria-describedby={consentError ? `${checkboxId}-error` : undefined}
+          className="mt-0.5 size-4 shrink-0 cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        />
+        <label htmlFor={checkboxId} className="cursor-pointer">
+          He leído y acepto los{" "}
+          <Link href={CONSENT.terms.href} target="_blank" rel="noopener noreferrer" className="font-medium text-fg underline underline-offset-4 hover:text-primary">
+            {CONSENT.terms.label}
+          </Link>{" "}
+          y la{" "}
+          <Link href={CONSENT.privacy.href} target="_blank" rel="noopener noreferrer" className="font-medium text-fg underline underline-offset-4 hover:text-primary">
+            {CONSENT.privacy.label}
+          </Link>
+        </label>
+      </div>
       <button
         type="button"
         onClick={login}
-        disabled={loading}
-        className={`inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-fg shadow-soft transition hover:bg-primary-hover disabled:opacity-60 ${className}`}
+        disabled={loading || !accepted}
+        aria-disabled={loading || !accepted}
+        className={`inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-semibold text-primary-fg shadow-soft transition hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
       >
         {loading ? "Redirigiendo…" : label}
       </button>
+      {consentError && <p id={`${checkboxId}-error`} role="alert" className="mt-2 text-sm text-danger">{CONSENT.error}</p>}
       {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
     </div>
   );

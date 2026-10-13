@@ -44,3 +44,16 @@ describe("landing copy", () => {
     expect(LANDING.marquee.length).toBeGreaterThanOrEqual(4);
   });
 });
+
+describe("landing footer", () => {
+  it("labels the legal links and does not expose the site owner", () => {
+    expect(LANDING.footer.links).toEqual([
+      { label: "Política de privacidad", href: "/privacidad" },
+      { label: "Términos y condiciones", href: "/terminos" },
+    ]);
+    const footer = JSON.stringify(LANDING.footer);
+    expect(footer).not.toContain("1090525663");
+    expect(footer).not.toContain("Víctor Ortiz");
+    expect("owner" in LANDING.footer).toBe(false);
+  });
+});
