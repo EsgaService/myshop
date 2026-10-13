@@ -1,10 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import {
-  requestImageUpload,
-  type ImageActionResult,
-} from "@/app/vendedor/(panel)/productos/image-actions";
+import { requestImageUpload } from "@/app/vendedor/(panel)/productos/image-actions";
 import { Button } from "@/components/ui/Button";
 import { CUSTOM_IMAGE_MAX_BYTES, customImageErrorMessage } from "@/lib/images/validate-custom-image";
 import { createClient } from "@/lib/supabase/client";
@@ -16,13 +13,13 @@ const TEMP_BUCKET = "seller-image-uploads";
  * a cover or a recipe) validates by magic bytes, re-encodes to WebP and applies it. The file type the
  * browser reports is never trusted; it only has to be an image for the picker.
  */
-export function CustomImageUpload({
+export function CustomImageUpload<T extends { ok: true }>({
   confirm,
   onDone,
   label = "Subir mi propia imagen",
 }: {
-  confirm: (tempPath: string) => Promise<ImageActionResult>;
-  onDone: (result: Extract<ImageActionResult, { ok: true }>) => void;
+  confirm: (tempPath: string) => Promise<T | { ok: false; message: string }>;
+  onDone: (result: T) => void;
   label?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);

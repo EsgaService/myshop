@@ -104,5 +104,8 @@ export type SellerUpload = {
   book_id: string | null;
   error: string | null;
   created_at: string;
+  /** Image extraction state (null = pending) and whether the seller still has to review the images. */
+  images_status: "processing" | "done" | "failed" | null;
+  images_review_pending: boolean;
   job: UploadJob | null;
 };

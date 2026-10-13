@@ -2,10 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireSeller } from "@/lib/auth/guards";
+import { photoUrl } from "@/lib/format";
+import { orderByPageProximity } from "@/lib/images/candidate-order";
 import { choiceErrorMessage } from "@/lib/images/choice-error-message";
 import { customImagePaths, customTempPath, isOwnTempPath } from "@/lib/images/custom-image-paths";
-import { decideCover } from "@/lib/images/decide-photo-choice";
+import { decideCover, decidePhotoChoice } from "@/lib/images/decide-photo-choice";
 import type { ImageRef } from "@/lib/images/decide-photo-choice";
 import { encodeCustomImage } from "@/lib/images/encode-custom-image";
 import { parseImageChoice } from "@/lib/images/parse-image-choice";
@@ -16,7 +19,8 @@ import {
   validateCustomImage,
 } from "@/lib/images/validate-custom-image";
 import { isUuid } from "@/lib/ids";
-import { getOwnedBook } from "@/lib/seller/owned";
+import { runIngestionWorker } from "@/lib/ingestion/worker";
+import { getOwnedBook, getOwnedUpload } from "@/lib/seller/owned";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ImageActionResult = { ok: true; coverUrl?: string | null } | { ok: false; message: string };
@@ -220,15 +224,16 @@ async function storeCustomImage(
 }
 
 /** Removes the target's earlier custom images (rows free the 300 quota; objects are best effort). */
-async function dropReplacedCustomImages(sellerId: string, keepId: string, column: "book_id" | "recipe_id", targetId: string) {
+async function dropReplacedCustomImages(sellerId: string, keepId: string | null, column: "book_id" | "recipe_id", targetId: string) {
   const admin = createAdminClient();
-  const { data } = await admin
+  let query = admin
     .from("book_images")
     .select("id,storage_path,thumb_path")
     .eq("seller_id", sellerId)
     .eq("kind", "custom")
-    .eq(column, targetId)
-    .neq("id", keepId);
+    .eq(column, targetId);
+  if (keepId) query = query.neq("id", keepId);
+  const { data } = await query;
   const old = (data ?? []) as { id: string; storage_path: string; thumb_path: string }[];
   if (old.length === 0) return;
   await admin.from("book_images").delete().in("id", old.map((r) => r.id)).eq("seller_id", sellerId);
@@ -264,4 +269,195 @@ export async function confirmCoverUpload(bookId: string, tempPath: string): Prom
   await dropReplacedCustomImages(seller.id, row.id, "book_id", book.id);
   revalidateProducts();
   return { ok: true, coverUrl: row.storage_path };
+}
+
+// ---------------------------------------------------------------------------
+// Recipe photos
+// ---------------------------------------------------------------------------
+
+type OwnedRecipe = {
+  id: string;
+  bookId: string;
+  bookSellerId: string;
+  uploadId: string | null;
+  sourcePage: number | null;
+};
+
+/** Loads a recipe with the owner of its product. The decider (not this lookup) holds the ownership rule. */
+async function loadRecipe(recipeId: unknown): Promise<OwnedRecipe | null> {
+  if (!isUuid(recipeId)) return null;
+  const admin = createAdminClient();
+  const { data: recipe, error } = await admin
+    .from("recipes")
+    .select("id,book_id,upload_id,source_page")
+    .eq("id", recipeId)
+    .maybeSingle();
+  if (error) throw new Error(`recipe lookup failed: ${error.message}`);
+  if (!recipe) return null;
+  const { data: book, error: bookError } = await admin.from("books").select("seller_id").eq("id", recipe.book_id as string).maybeSingle();
+  if (bookError) throw new Error(`book lookup failed: ${bookError.message}`);
+  if (!book) return null;
+  return {
+    id: recipe.id as string,
+    bookId: recipe.book_id as string,
+    bookSellerId: book.seller_id as string,
+    uploadId: (recipe.upload_id as string | null) ?? null,
+    sourcePage: (recipe.source_page as number | null) ?? null,
+  };
+}
+
+export type RecipeCandidate = { id: string; page: number; thumbUrl: string; label: string };
+export type ListRecipeCandidatesResult =
+  | { ok: true; items: RecipeCandidate[]; total: number }
+  | { ok: false; message: string };
+
+const CANDIDATE_PAGE = 24;
+
+/**
+ * Lazy candidates for one recipe: images of the PDF it came from, nearest pages first, `CANDIDATE_PAGE` at a
+ * time. Recipes of legacy uploads without a PDF fall back to every active PDF of the product.
+ */
+export async function listRecipeCandidates(recipeId: string, offset = 0): Promise<ListRecipeCandidatesResult> {
+  const { seller } = await requireSeller();
+  const recipe = await loadRecipe(recipeId);
+  if (!recipe || recipe.bookSellerId !== seller.id) return { ok: false, message: choiceErrorMessage("not_owner") };
+
+  const active = await loadActiveUploadIds(seller.id, recipe.bookId);
+  const uploadIds = recipe.uploadId ? active.filter((id) => id === recipe.uploadId) : active;
+  if (uploadIds.length === 0) return { ok: true, items: [], total: 0 };
+
+  const { data, error } = await createAdminClient()
+    .from("book_images")
+    .select("id,page,ordinal,thumb_path")
+    .eq("seller_id", seller.id)
+    .eq("kind", "pdf")
+    .in("upload_id", uploadIds);
+  if (error) return { ok: false, message: GENERIC };
+
+  const rows = (data ?? []) as { id: string; page: number; ordinal: number; thumb_path: string }[];
+  const ordered = orderByPageProximity(rows, recipe.sourcePage);
+  const start = Number.isInteger(offset) && offset > 0 ? offset : 0;
+  return {
+    ok: true,
+    total: ordered.length,
+    items: ordered.slice(start, start + CANDIDATE_PAGE).map((r) => ({
+      id: r.id,
+      page: r.page,
+      thumbUrl: photoUrl(r.thumb_path) ?? "",
+      label: `p. ${r.page}`,
+    })),
+  };
+}
+
+export type RecipePhotoResult = { ok: true; photoPath: string | null } | { ok: false; message: string };
+
+/** Picks one of the recipe's PDF images, one of its own uploads, or removes the photo (`photo_source` = none). */
+export async function setRecipePhoto(recipeId: string, rawChoice: unknown): Promise<RecipePhotoResult> {
+  const { seller } = await requireSeller();
+  const recipe = await loadRecipe(recipeId);
+  if (!recipe) return { ok: false, message: choiceErrorMessage("not_owner") };
+  const choice = parseImageChoice(rawChoice);
+  if (!choice || choice.type === "clear") return { ok: false, message: GENERIC };
+
+  const image = choice.type === "remove" ? null : await loadOwnedImage(seller.id, choice.imageId);
+  const decision = decidePhotoChoice({
+    sellerId: seller.id,
+    recipe: { id: recipe.id, bookSellerId: recipe.bookSellerId },
+    activeUploadIds: await loadActiveUploadIds(seller.id, recipe.bookId),
+    choice: choice.type === "remove" ? { type: "remove" } : { type: choice.type, image: image ? toRef(image) : null },
+  });
+  if (!decision.ok) return { ok: false, message: choiceErrorMessage(decision.reason) };
+
+  const photoPath = image && decision.imageId ? image.storage_path : null;
+  const { error } = await createAdminClient()
+    .from("recipes")
+    .update({ photo_path: photoPath, photo_source: decision.photoSource })
+    .eq("id", recipe.id)
+    .eq("book_id", recipe.bookId);
+  if (error) return { ok: false, message: GENERIC };
+  // The recipe no longer uses its own upload: free it from the 300 image quota.
+  if (decision.photoSource !== "custom") await dropReplacedCustomImages(seller.id, null, "recipe_id", recipe.id);
+  revalidateProducts();
+  return { ok: true, photoPath };
+}
+
+/** Step 2 for a recipe: validate, re-encode, store and set the uploaded image as the recipe photo. */
+export async function confirmRecipeImageUpload(recipeId: string, tempPath: string): Promise<RecipePhotoResult> {
+  const { seller } = await requireSeller();
+  const recipe = await loadRecipe(recipeId);
+  if (!recipe || recipe.bookSellerId !== seller.id) return { ok: false, message: choiceErrorMessage("not_owner") };
+  if (!isOwnTempPath(seller.id, tempPath)) return { ok: false, message: GENERIC };
+
+  const stored = await storeCustomImage(seller.id, tempPath, { recipeId: recipe.id });
+  if (!stored.ok) return stored;
+  const { row } = stored.stored;
+
+  const decision = decidePhotoChoice({
+    sellerId: seller.id,
+    recipe: { id: recipe.id, bookSellerId: recipe.bookSellerId },
+    activeUploadIds: [],
+    choice: { type: "custom", image: toRef(row) },
+  });
+  if (!decision.ok) return { ok: false, message: choiceErrorMessage(decision.reason) };
+
+  const { error } = await createAdminClient()
+    .from("recipes")
+    .update({ photo_path: row.storage_path, photo_source: decision.photoSource })
+    .eq("id", recipe.id)
+    .eq("book_id", recipe.bookId);
+  if (error) return { ok: false, message: GENERIC };
+
+  await dropReplacedCustomImages(seller.id, row.id, "recipe_id", recipe.id);
+  revalidateProducts();
+  return { ok: true, photoPath: row.storage_path };
+}
+
+// ---------------------------------------------------------------------------
+// Per-PDF actions
+// ---------------------------------------------------------------------------
+
+/**
+ * Queues the images of a finished PDF to be searched again (the sweep picks up `images_status = null`).
+ * Re-extraction only touches recipes whose photo source is `auto`, so the seller's choices are kept (R3.4).
+ */
+export async function reextractUpload(uploadId: string): Promise<ImageActionResult> {
+  const { seller } = await requireSeller();
+  const upload = await getOwnedUpload(seller.id, uploadId);
+  if (!upload || upload.status !== "ready") return { ok: false, message: "No encontramos ese archivo." };
+
+  const { data, error } = await createAdminClient()
+    .from("book_uploads")
+    .update({ images_status: null, images_attempts: 0, images_error: null })
+    .eq("id", upload.id)
+    .eq("seller_id", seller.id)
+    .in("images_status", ["done", "failed"])
+    .select("id");
+  if (error) return { ok: false, message: GENERIC };
+  if (!data || data.length === 0) return { ok: false, message: "Este PDF ya está buscando sus imágenes." };
+
+  after(async () => {
+    try {
+      await runIngestionWorker();
+    } catch (e) {
+      console.error("image sweep kick failed", e);
+    }
+  });
+  revalidateProducts();
+  return { ok: true };
+}
+
+/** Clears the "review images" notice of a PDF. Called by the editor on the client, never by a GET (R3.7). */
+export async function markImagesReviewed(uploadId: string): Promise<ImageActionResult> {
+  const { seller } = await requireSeller();
+  const upload = await getOwnedUpload(seller.id, uploadId);
+  if (!upload) return { ok: false, message: "No encontramos ese archivo." };
+
+  const { error } = await createAdminClient()
+    .from("book_uploads")
+    .update({ images_review_pending: false })
+    .eq("id", upload.id)
+    .eq("seller_id", seller.id);
+  if (error) return { ok: false, message: GENERIC };
+  revalidateProducts();
+  return { ok: true };
 }

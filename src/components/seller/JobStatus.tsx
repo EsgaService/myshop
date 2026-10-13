@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { removeUpload, retryIngestion, type SimpleResult } from "@/app/vendedor/(panel)/productos/actions";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { SellerUpload, UploadJob } from "@/lib/data/types";
+import { decideReviewNotice } from "@/lib/images/decide-review-notice";
 import { describeUpload } from "@/lib/ingestion/job-view";
 import { MoveUploadControl } from "./MoveUploadControl";
 import type { MoveTarget } from "./MoveUploadForm";
@@ -28,6 +29,11 @@ export function JobStatus({ upload, moveTargets = [] }: { upload: SellerUpload; 
   const job: PolledJob | null = polled ?? (upload.job ? { ...upload.job, error: upload.job.last_error } : null);
   const view = describeUpload({ uploadStatus: upload.status, job });
   const canRemove = view.canRemove;
+  const showReviewNotice = decideReviewNotice({
+    uploadStatus: upload.status,
+    imagesStatus: upload.images_status,
+    reviewPending: upload.images_review_pending,
+  });
   const error = job?.status === "failed" ? job.error : upload.status === "failed" ? upload.error : null;
 
   const jobId = upload.job?.id;
@@ -103,6 +109,12 @@ export function JobStatus({ upload, moveTargets = [] }: { upload: SellerUpload; 
       </div>
       <div className="flex items-center gap-2">
         <Badge tone={view.tone} aria-live="polite">{view.label}</Badge>
+        {showReviewNotice && <Badge tone="primary">Revisa las imágenes</Badge>}
+        {upload.status === "ready" && upload.book_id && (
+          <ButtonLink variant="outline" className="h-9 px-4" href={`/vendedor/productos/${upload.book_id}/recetas?upload=${upload.id}`}>
+            Visualizar y editar
+          </ButtonLink>
+        )}
         {view.canRetry && (
           <Button variant="outline" className="h-9 px-4" disabled={pending} onClick={() => run(retryIngestion)}>
             Reintentar

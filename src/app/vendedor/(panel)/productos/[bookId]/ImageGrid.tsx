@@ -12,6 +12,7 @@ export function ImageGrid({
   selectedId,
   onSelect,
   pageSize = 24,
+  paginate = true,
   emptyText,
   disabled = false,
 }: {
@@ -19,10 +20,13 @@ export function ImageGrid({
   selectedId: string | null;
   onSelect: (id: string) => void;
   pageSize?: number;
+  /** false renders every image given (the parent already loads them in pages). */
+  paginate?: boolean;
   emptyText: string;
   disabled?: boolean;
 }) {
-  const [visible, setVisible] = useState(pageSize);
+  const [shown, setVisible] = useState(pageSize);
+  const visible = paginate ? shown : images.length;
   if (images.length === 0) return <p className="text-sm text-fg-muted">{emptyText}</p>;
 
   return (

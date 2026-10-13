@@ -1,3 +1,4 @@
+import type { PhotoSource } from "@/lib/images/describe-recipe-photo";
 import { createClient } from "@/lib/supabase/server";
 
 /** An image offered to the seller in a picker. URLs are public `recipe-photos` objects (see `photoUrl`). */
@@ -60,6 +61,27 @@ export async function listPdfCandidates(sellerId: string, uploadIds: string[]): 
     .order("ordinal")
     .limit(PAGE_LIMIT);
   return ((data ?? []) as unknown as CandidateRow[]).map(toCandidate);
+}
+
+export type RecipePhotoItem = {
+  id: string;
+  title: string;
+  photoPath: string | null;
+  photoSource: PhotoSource;
+  uploadId: string | null;
+};
+
+/** Recipes of a product in reading order, optionally only those that came from one PDF. Runs under the seller's RLS. */
+export async function listRecipesForPhotos(bookId: string, uploadId?: string): Promise<RecipePhotoItem[]> {
+  let query = (await createClient())
+    .from("recipes")
+    .select("id,title,photo_path,photo_source,upload_id")
+    .eq("book_id", bookId);
+  if (uploadId) query = query.eq("upload_id", uploadId);
+  const { data } = await query.order("position");
+  return ((data ?? []) as unknown as { id: string; title: string; photo_path: string | null; photo_source: PhotoSource; upload_id: string | null }[]).map(
+    (r) => ({ id: r.id, title: r.title, photoPath: r.photo_path, photoSource: r.photo_source, uploadId: r.upload_id }),
+  );
 }
 
 /** The seller's own uploaded images for one product cover or one recipe. */

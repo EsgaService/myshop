@@ -171,7 +171,7 @@ export const listMyUploads = cache(async (sellerId: string): Promise<SellerUploa
   const supabase = await createClient();
   const { data: uploads } = await supabase
     .from("book_uploads")
-    .select("id,original_name,size_bytes,status,book_id,error,created_at")
+    .select("id,original_name,size_bytes,status,book_id,error,created_at,images_status,images_review_pending")
     .eq("seller_id", sellerId)
     .is("removed_at", null)
     .order("created_at", { ascending: false });
