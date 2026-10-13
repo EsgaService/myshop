@@ -1,6 +1,67 @@
 @import "tailwindcss";
 
+/*
+ * App design tokens ("kitchen paper"): warm neutrals, paprika primary.
+ * Per-book branding lives in --brand-* variables, which are only set inside the
+ * book container and are exposed as book-* utilities (bg-book-primary, ...).
+ */
 :root {
+  /* Warm neutral scale */
+  --neutral-0: #ffffff;
+  --neutral-50: #faf8f5;
+  --neutral-100: #f4f1ec;
+  --neutral-200: #e8e3db;
+  --neutral-300: #d6cfc4;
+  --neutral-400: #b0a799;
+  --neutral-500: #8a8174;
+  --neutral-600: #6b6357;
+  --neutral-700: #4d473e;
+  --neutral-800: #332f29;
+  --neutral-900: #1d1a16;
+
+  /* Brand + status */
+  --paprika-500: #c8461e;
+  --paprika-600: #ab3a17;
+  --paprika-100: #fbe6dd;
+  --olive-600: #4f6b2f;
+  --olive-100: #e6efd9;
+  --saffron-600: #a86a06;
+  --saffron-100: #fcefd0;
+  --night: #15130f;
+
+  /* Semantic roles (light) */
+  --bg: var(--neutral-50);
+  --surface: var(--neutral-0);
+  --surface-muted: var(--neutral-100);
+  --border: var(--neutral-200);
+  --border-strong: var(--neutral-300);
+  --fg: var(--neutral-900);
+  --fg-muted: var(--neutral-600);
+  --primary: var(--paprika-500);
+  --primary-hover: var(--paprika-600);
+  --primary-soft: var(--paprika-100);
+  --primary-fg: #ffffff;
+  --success: var(--olive-600);
+  --success-soft: var(--olive-100);
+  --warning: var(--saffron-600);
+  --warning-soft: var(--saffron-100);
+  --danger: #b42318;
+  --danger-soft: #fde7e4;
+  --ring: #e0805f;
+  --ink: var(--night);
+  --ink-fg: #f4f1ec;
+
+  /* Elevation */
+  --elev-soft: 0 1px 2px rgb(29 26 22 / 0.05), 0 1px 3px rgb(29 26 22 / 0.06);
+  --elev-lift: 0 10px 30px -12px rgb(29 26 22 / 0.2), 0 4px 10px -6px rgb(29 26 22 / 0.1);
+
+  /* Motion */
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 600ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Per-book branding defaults (overridden inside the book container) */
   --brand-primary: #1f2937;
   --brand-secondary: #f59e0b;
   --brand-bg: #ffffff;
@@ -8,15 +69,134 @@
   --brand-font: Inter, system-ui, sans-serif;
 }
 
-body {
-  background: var(--brand-bg);
-  color: var(--brand-text);
-  font-family: var(--brand-font);
+.dark {
+  --bg: #12100d;
+  --surface: #1b1814;
+  --surface-muted: #24201b;
+  --border: #302b24;
+  --border-strong: #433c33;
+  --fg: #f4f1ec;
+  --fg-muted: #a8a094;
+  --primary: #e0613a;
+  --primary-hover: #ec7650;
+  --primary-soft: #3a1f15;
+  --primary-fg: #1d1a16;
+  --success: #9bbf6b;
+  --success-soft: #232d16;
+  --warning: #e3a64a;
+  --warning-soft: #33260c;
+  --danger: #f2877d;
+  --danger-soft: #3a1714;
+  --ring: #e0613a;
+  --ink: #0b0a08;
+  --ink-fg: #f4f1ec;
 }
 
 @theme inline {
-  --color-brand: var(--brand-primary);
-  --color-accent: var(--brand-secondary);
-  --color-surface: var(--brand-bg);
-  --color-ink: var(--brand-text);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-fg: var(--primary-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-ring: var(--ring);
+  --color-ink: var(--ink);
+  --color-ink-fg: var(--ink-fg);
+
+  --color-book-primary: var(--brand-primary);
+  --color-book-accent: var(--brand-secondary);
+  --color-book-surface: var(--brand-bg);
+  --color-book-ink: var(--brand-text);
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --radius-card: 1.25rem;
+  --shadow-soft: var(--elev-soft);
+  --shadow-lift: var(--elev-lift);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--primary-soft);
+  color: var(--fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Subtle paper grain for hero / dark accents (no external image). */
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.14;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
+  50% { transform: translateY(-8px) rotate(var(--r, 0deg)); }
+}
+
+.reveal {
+  opacity: 0;
+  animation: rise var(--dur-slow) var(--ease-out) forwards;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 38s linear infinite;
+}
+
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+.float-slow {
+  animation: float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; animation: none; }
+  .marquee-track, .float-slow { animation: none; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; }
 }

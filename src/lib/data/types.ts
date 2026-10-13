@@ -1,22 +1,6 @@
-export type Store = {
-  id: string;
-  slug: string;
-  name: string;
-  tagline: string | null;
-  description: string | null;
-  logo_url: string | null;
-  cover_url: string | null;
-  primary_color: string;
-  secondary_color: string;
-  background_color: string;
-  text_color: string;
-  font: string;
-  price_cents: number;
-  currency: string;
-  teaser: {
-    intro?: string[];
-    sample?: { title: string; ingredients: string[]; steps: string[] } | null;
-  };
+export type BookTeaser = {
+  intro?: string[];
+  sample?: { title: string; ingredients: string[] } | null;
 };
 
 export type Category = { id: string; slug: string; name: string; description: string | null; position: number };
@@ -46,3 +30,82 @@ export type Block =
   | { tipo: "tabla"; filas: string[][] };
 
 export type Section = { id: string; position: number; title: string; blocks: Block[] };
+
+export type AccountRole = "buyer" | "seller";
+
+export type Profile = {
+  id: string;
+  role: AccountRole;
+  display_name: string | null;
+  avatar_url: string | null;
+  phone: string | null;
+  city: string | null;
+};
+
+export type Seller = {
+  id: string;
+  slug: string;
+  store_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+  city: string | null;
+  instagram: string | null;
+  whatsapp: string | null;
+  is_platform: boolean;
+};
+
+export type BookStatus = "draft" | "published" | "archived";
+
+/** A sellable book (listing metadata only; recipes are loaded separately under RLS). */
+export type Book = {
+  id: string;
+  seller_id: string;
+  slug: string;
+  title: string;
+  tagline: string | null;
+  description: string | null;
+  cover_url: string | null;
+  primary_color: string;
+  secondary_color: string;
+  background_color: string;
+  text_color: string;
+  font: string;
+  price_cents: number;
+  currency: string;
+  teaser: BookTeaser;
+  status: BookStatus;
+  published_at: string | null;
+};
+
+export type BookWithSeller = Book & { seller: Pick<Seller, "id" | "slug" | "store_name" | "is_platform"> };
+
+export type UploadStatus = "pending" | "uploaded" | "processing" | "ready" | "failed";
+export type JobStatus = "queued" | "processing" | "succeeded" | "failed";
+
+export type UploadJob = {
+  id: string;
+  upload_id: string;
+  status: JobStatus;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+};
+
+/**
+ * A PDF uploaded by the current seller, with its ingestion job (if confirmed).
+ * `book_id` is the product it belongs to (null only for legacy uploads created before products existed);
+ * a PDF is ingested when `status === "ready"`.
+ */
+export type SellerUpload = {
+  id: string;
+  original_name: string;
+  size_bytes: number;
+  status: UploadStatus;
+  book_id: string | null;
+  error: string | null;
+  created_at: string;
+  /** Image extraction state (null = pending) and whether the seller still has to review the images. */
+  images_status: "processing" | "done" | "failed" | null;
+  images_review_pending: boolean;
+  job: UploadJob | null;
+};

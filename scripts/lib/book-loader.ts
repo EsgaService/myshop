@@ -2,7 +2,7 @@
 // then renders that Book as idempotent SQL.
 import fs from "node:fs";
 import path from "node:path";
-import { parseIngredient, parseYield, slugify, type Ingredient } from "./normalize-book";
+import { parseIngredient, parseYield, slugify, type Ingredient } from "../../src/lib/recipes/normalize-book";
 
 export type Block = { tipo: string; [k: string]: unknown };
 export type Section = { title: string; position: number; blocks: Block[] };
@@ -27,7 +27,7 @@ export type Book = {
   sections: Section[];
   categories: Category[];
   recipes: Recipe[];
-  teaser: { intro: string[]; sample: { title: string; ingredients: string[]; steps: string[] } | null };
+  teaser: { intro: string[]; sample: { title: string; ingredients: string[] } | null };
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,7 +141,7 @@ export function loadBook(dir: string, storeSlug: string): Book {
     recipes,
     teaser: {
       intro,
-      sample: first ? { title: first.title, ingredients: first.ingredients.map((i) => i.raw), steps: first.steps } : null,
+      sample: first ? { title: first.title, ingredients: first.ingredients.map((i) => i.raw) } : null,
     },
   };
 }
