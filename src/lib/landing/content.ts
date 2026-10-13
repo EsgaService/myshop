@@ -52,8 +52,8 @@ export const LANDING = {
   },
   footer: {
     links: [
-      { label: "Privacidad", href: "/privacidad" },
-      { label: "Términos", href: "/terminos" },
+      { label: "Política de privacidad", href: "/privacidad" },
+      { label: "Términos y condiciones", href: "/terminos" },
     ] satisfies Cta[],
   },
 } as const;

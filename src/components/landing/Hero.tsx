@@ -1,4 +1,6 @@
 import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
+import { CONSENT } from "@/lib/auth/consent";
 import { LANDING } from "@/lib/landing/content";
 import { ButtonLink } from "@/components/ui/Button";
 import { BookMock } from "./BookMock";
@@ -27,6 +29,12 @@ export function Hero() {
               {ctas.login.label}
             </ButtonLink>
           </div>
+          <p className="reveal mt-4 text-xs text-fg-muted" style={{ "--i": 3 } as React.CSSProperties}>
+            Al continuar aceptas los{" "}
+            <Link href={CONSENT.terms.href} className="underline underline-offset-4 hover:text-fg">{CONSENT.terms.label}</Link>{" "}
+            y la{" "}
+            <Link href={CONSENT.privacy.href} className="underline underline-offset-4 hover:text-fg">{CONSENT.privacy.label}</Link>.
+          </p>
         </div>
         <div className="reveal px-2 pb-8 sm:px-8 lg:px-0" style={{ "--i": 4 } as React.CSSProperties}>
           <BookMock />
