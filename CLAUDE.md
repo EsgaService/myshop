@@ -77,6 +77,7 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Applied on 2026-10-12 (Supabase CLI, `supabase db query --linked --project-ref ihbmaydqjsoynsiugzfv -f <file>`): Migration B `20261013090100_remove_upload_rpc` (`remove_upload_from_book`) and Migration C `20261013090200_move_upload_rpc` (`move_upload_to_book`). Both contain DELETE, so the MCP rejects them. `supabase/tests/multi_pdf_removal_checks.sql` and `multi_pdf_move_checks.sql` passed remotely. Both versions were inserted by hand into `supabase_migrations.schema_migrations`.
 - Applied on 2026-10-12: `20261012130000_marketplace_review_fixes` (claim bounds, `manual_retries`, upload slot rule, `grant_subscription_period`, `sellers` column grants, teaser scrub).
 - Applied on 2026-10-12 (MCP): `20261015090000_pdf_images` (book_images, images_* columns, source columns, `claim_image_extraction`, bucket `seller-image-uploads`). Structure verified; the `claim_image_extraction` block of `supabase/tests/pdf_images_checks.sql` was NOT run remotely because real pending uploads would make it fail. First real run: cocteles 61 images (26 of 27 recipes with photo), limonadas 55 (25/28), micheladas 49 (5/22).
+- Applied on 2026-10-12 (MCP): `20261014090000_payment_checkouts`, `20261014090100_seller_payout_accounts`, `20261014090200_payment_hardening` (recorded remotely as 20261013000217, 20261013000219 and 20261013002736: the MCP stamps its own version).
 - Applied on 2026-10-12 (MCP): `20261015090100_custom_image_quota` (before-insert trigger on `book_images`, 300 custom images per seller under a per-seller advisory lock). The quota check and `supabase/tests/merge_keeps_published_checks.sql` (merging a PDF keeps a product published, same price/title) passed remotely.
 - Bucket `seller-pdfs` is private, 20 MB, PDF only, no `storage.objects` client policies (uploads use signed upload URLs).
 - Not yet verified with real sessions: buyer reading purchased recipes, seller flows end to end.
@@ -118,14 +119,14 @@ Next.js 16 (App Router, `src/proxy.ts` refreshes the session) + React 19 + Tailw
 - Payout account data (`seller_payout_accounts`) is sensitive personal data (Ley 1581 de 2012) and needs legal review. Disbursement ("dispersion") to sellers is MANUAL; publishing is not blocked when the account is missing.
 
 - Legal text in `/privacidad` and `/terminos` is generic copy (`src/lib/legal/content.ts`). **A lawyer review is recommended before scaling** (Colombia's Ley 1581 de 2012 applies to personal data).
-- Landing copy says payments go through "pasarelas de pago" while only the mock exists: needs legal/marketing review.
+- Landing copy says payments go through "pasarelas de pago": Wompi is the only real gateway (platform account). Needs legal/marketing review.
 - Price bounds (5.000 to 1.000.000 COP), the 20 MB limit and the 12-upload cap are assumptions.
 - Changing a seller slug breaks previously shared links (no redirect history): the slug is locked while any book is published, but a seller who unpublishes everything can still change it.
 - Removing a PDF (and its recipes) from a product buyers already purchased, and letting buyers download the original PDFs, need legal review (Ley 1480 de 2011, consumer protection / digital content). Today removal is allowed on sold products and purchases are untouched.
 - Very large PDFs (over about 100 pages) may exceed model limits; the job fails with a readable error.
 - Photos: the `recipe-photos` bucket is public, so anyone with a direct photo URL can see the photo without paying. The recipe text stays protected.
 - Temp custom-image uploads (private bucket `seller-image-uploads`) are deleted on every confirm path, but an upload that is never confirmed stays there: a periodic TTL cleanup is not built yet.
-- No real payment gateway yet, only the mock.
+- Wompi is integrated (platform account collects everything); sandbox keys are refused in production. A real end-to-end payment in production is not yet verified.
 
 ## Next steps
 
